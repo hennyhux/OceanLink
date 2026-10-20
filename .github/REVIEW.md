@@ -1,0 +1,107 @@
+# OceanLink Documentation Review
+
+Date: 2026-10-20
+
+Files reviewed:
+
+- [REQUIREMENTS.md](REQUIREMENTS.md) (version 2.0)
+- [DEPLOYMENT.md](DEPLOYMENT.md)
+- [GLOBAL_CONTEXT.md](GLOBAL_CONTEXT.md)
+- [agents/frontend.md](agents/frontend.md)
+
+There is no application code yet, so this review covers the documents only.
+
+Priority key: **High** = will cause wrong work or a broken build if left as is. **Medium** = a gap someone will hit during MVP 1. **Low** = cleanup.
+
+## 1. Conflicts between documents
+
+| #    | Priority | Where                                                                                | Problem                                                                                                                                                                                               | Suggested fix                                                                                                     |
+| ---- | -------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 1.1  | High     | REQUIREMENTS 16.1 vs DEPLOYMENT 1, 16                                                | REQUIREMENTS requires AWS CDK and separate `dev`, `staging`, and `prod`. DEPLOYMENT has one `prod`, manual documented setup, and defers infrastructure as code.                                       | Replace REQUIREMENTS 16.1 with a short pointer to DEPLOYMENT.md. Keep deployment rules in one file.               |
+| 1.2  | High     | REQUIREMENTS 11.1 and 14.2 vs DEPLOYMENT 9                                           | REQUIREMENTS says the base path is `/api/v1`. DEPLOYMENT sets `VITE_API_BASE_URL=/api` and routes `/api` and `/api/*`. It is unclear whether `/v1` lives in the env var or in the generated client.   | Pick one. Suggested: `VITE_API_BASE_URL=/api/v1` and CloudFront still forwards `/api*`. Update DEPLOYMENT 9.      |
+| 1.3  | High     | frontend.md "React and TypeScript standards" vs REQUIREMENTS 14.1 and GLOBAL_CONTEXT | The agent file says do not introduce TanStack Query or a UI kit. REQUIREMENTS mandates TanStack Query, MUI, React Hook Form, and Zod. GLOBAL_CONTEXT says TanStack Query only for server state.       | Update frontend.md to name the approved stack and forbid additions beyond it.                                     |
+| 1.4  | High     | frontend.md "Product priorities" vs REQUIREMENTS 1.1 and 4.4                         | The agent file says support English/Chinese only when requested or when a pattern exists. REQUIREMENTS requires both languages from MVP 1 with no hardcoded strings.                                  | Change frontend.md to: every user-facing string is translated into English and Simplified Chinese from the start. |
+| 1.5  | Medium   | frontend.md "Product priorities" vs REQUIREMENTS 4.3 and 4.5                         | The agent file lists "understanding occupied and available capacity" as an MVP 1 priority. REQUIREMENTS puts physical occupancy in MVP 2 and says MVP 1 must not show contracted vehicles as present. | In frontend.md, change MVP 1 to contracted capacity and billing. Move occupancy to MVP 2.                         |
+| 1.6  | Medium   | frontend.md "UX and accessibility" vs REQUIREMENTS 14.5 and GLOBAL_CONTEXT           | The agent file targets WCAG 2.2 AA. The other two say WCAG 2.1 AA.                                                                                                                                    | Pick one. 2.2 AA is a superset and is a reasonable target. Update the other files if chosen.                      |
+| 1.7  | Medium   | frontend.md "UX and accessibility" vs REQUIREMENTS 4.4 and 17.2                      | The agent file says desktop-first. REQUIREMENTS says laptop and tablet for MVP 1 and phone or tablet for the MVP 2 check-in workflow.                                                                 | Change frontend.md to: laptop and tablet first, phone usable for MVP 2 operations.                                |
+| 1.8  | Medium   | frontend.md "Sources of truth"                                                       | Lists REQUIREMENTS.md but not DEPLOYMENT.md or GLOBAL_CONTEXT.md.                                                                                                                                     | Add both. GLOBAL_CONTEXT.md carries the writing rules (no em dashes, plain language).                             |
+| 1.9  | Medium   | REQUIREMENTS 4 goal, 15, and DEPLOYMENT 13                                           | The legacy system is described three ways: a "separate spreadsheet" (4), an "existing application" (15), and a "desktop application" (DEPLOYMENT 13).                                                 | Describe the legacy system once, in REQUIREMENTS 15, and reference it elsewhere.                                  |
+| 1.10 | Low      | REQUIREMENTS 16.4 vs DEPLOYMENT 12                                                   | Backup cadence: "at least hourly, 30 days" vs "every 30 minutes, 7 days frequent plus 30 days daily". RPO and RTO match. Not a conflict, but two sources.                                             | Replace REQUIREMENTS 16.4 with a pointer to DEPLOYMENT 12.                                                        |
+| 1.11 | Low      | REQUIREMENTS 3                                                                       | "Development and staging deployment alone do not mean an MVP is complete" assumes dev and staging exist.                                                                                              | Reword to "a non-production deployment alone does not mean an MVP is complete".                                   |
+| 1.12 | Low      | frontend.md terminology                                                              | Uses "contracts" and "trucks". REQUIREMENTS uses "agreements" and "vehicles". The glossary in GLOBAL_CONTEXT uses the REQUIREMENTS terms.                                                             | Align frontend.md to "agreements" and "vehicles".                                                                 |
+
+## 2. Internal inconsistencies in REQUIREMENTS.md
+
+| #    | Priority | Section          | Problem                                                                                                                                                                              | Suggested fix                                                                                                                                 |
+| ---- | -------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2.1  | Medium   | 7.2, 11.3, M1-05 | Agreement status is `approved` but the action is `activate` and the requirement says "activate".                                                                                     | Rename the status to `active` or the endpoint to `/approve`. One word everywhere.                                                             |
+| 2.2  | Medium   | 7.2, 10          | Both Vehicle and ParkingAgreement carry a capacity category. No rule says what happens if they differ.                                                                               | Add: the agreement category must be compatible with the vehicle category. Reject activation otherwise.                                        |
+| 2.3  | Medium   | 7.7, 11.6        | Spot records "exist from initial setup" and MVP 1 dashboard shows committed capacity, but every spot and capacity endpoint is in MVP 2 (11.6). There is no MVP 1 way to create them. | Either move `GET/POST /lots/{id}/spots` and capacity pools to MVP 1 admin, or state that MVP 1 capacity is loaded by the import or bootstrap. |
+| 2.4  | Medium   | 7.6, 11.4        | "Applying existing credit must not create a second cash receipt", but there is no endpoint to apply customer credit to an invoice.                                                   | Add `POST /customers/{id}/credit/apply` (or allow `/payments/{id}/allocate` on a credit balance) and define its audit event.                  |
+| 2.5  | Medium   | 4.2              | Navigation includes "Settings" but no requirement says what it holds.                                                                                                                | List it: lot details, capacity, hourly rates (MVP 2), staff accounts, language, invoice numbering.                                            |
+| 2.6  | Medium   | 11.7             | `/me/vehicles…` is a placeholder.                                                                                                                                                    | Enumerate the paths before MVP 3, or drop the row and say "driver vehicle endpoints to be defined".                                           |
+| 2.7  | Low      | 9                | Aging buckets use en dashes (1–30). GLOBAL_CONTEXT bans em dashes; en dashes are close enough that a reader will flag them. Same at "MVP 1–3" in 11.8.                               | Use "1 to 30 days" and "MVP 1 to 3".                                                                                                          |
+| 2.8  | Low      | 12.1             | `If-Match` normally carries an ETag. The doc says "with the resource version" but not the format.                                                                                    | State it, for example `If-Match: "7"` (quoted version number) and `ETag` on reads.                                                            |
+| 2.9  | Low      | 4.1              | Requirement IDs (M1-01 and so on) came back after the earlier request to remove IDs.                                                                                                 | Confirm whether IDs are wanted. They are useful for acceptance tracking.                                                                      |
+| 2.10 | Low      | Whole file       | Headings are bold text (`**1. Purpose**`), not Markdown headings. There is no outline, no anchor links, and the other docs cannot link to a section.                                 | Convert to `##` and `###` headings.                                                                                                           |
+
+## 3. Gaps that will block MVP 1
+
+| #    | Priority | Where                                          | Gap                                                                                                                                                                                                 | Suggested fix                                                                                                                                                         |
+| ---- | -------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1  | High     | REQUIREMENTS 11, DEPLOYMENT 7.2 step 7 and 14  | DEPLOYMENT requires "confirm compatibility with the deployed backend" and an "API readiness check", but the API contract has no health or version endpoint.                                         | Add `GET /health` (unauthenticated, no data) and `GET /version` (app version, schema version, API version) to 11.1.                                                   |
+| 3.2  | High     | REQUIREMENTS 14.2, DEPLOYMENT 7.1              | The typed client is generated from the backend OpenAPI schema, but the schema lives in another repo. The CI steps do not say where the frontend gets it.                                            | Commit a copy of `openapi.json` in this repo under `api/`. Update it by PR. Add a CI check that the generated client matches the committed schema.                    |
+| 3.3  | High     | REQUIREMENTS 13.1 and 13.3, DEPLOYMENT 2 and 6 | Production uses the `__Host-session_id` cookie, which requires `Secure`. Local dev is `http://localhost:5173` with a proxy. Chrome and Firefox accept Secure cookies on localhost; Safari does not. | Decide: either the backend uses a plain `session_id` cookie when running in dev mode, or local dev uses HTTPS (mkcert). Write it in DEPLOYMENT 2.                     |
+| 3.4  | Medium   | REQUIREMENTS 13.4, DEPLOYMENT 5                | Login rate limiting is per IP, but behind CloudFront the backend sees CloudFront addresses. DEPLOYMENT mentions trusted proxy host and scheme, not client IP.                                       | Add: the backend trusts `X-Forwarded-For` or `CloudFront-Viewer-Address` only from CloudFront, and rate limits on that value.                                         |
+| 3.5  | Medium   | DEPLOYMENT 2 and 6                             | The backend origin is reachable directly on the internet. Auth still applies, but nothing stops a caller from bypassing CloudFront headers and policies.                                            | Add a CloudFront origin custom header with a secret value. The backend rejects requests without it.                                                                   |
+| 3.6  | Medium   | REQUIREMENTS 14.3, DEPLOYMENT 7.4              | DEPLOYMENT requires "a safe refresh path for outdated tabs". No UI requirement describes it.                                                                                                        | Add to 14.3: the app detects a new release (for example a version file or header) and shows a "reload to update" prompt that does not discard unsaved work.           |
+| 3.7  | Medium   | REQUIREMENTS 13.2, 11.2                        | The `/auth/activity` ping adds a client timer, a backend route, and edge cases for little gain.                                                                                                     | Simpler: any authenticated request that is not marked as background extends idle time. The client sends `X-Background: 1` on polling requests. Drop `/auth/activity`. |
+| 3.8  | Medium   | REQUIREMENTS 4.4, 10                           | Language is stored on the user, but the login page shows before any user exists.                                                                                                                    | State that the UI language is kept in `localStorage` (not sensitive) and copied to the user profile after login.                                                      |
+| 3.9  | Medium   | REQUIREMENTS M1-14, 11.5, 13.5                 | CSV exports contain customer PII. Nothing says exports are audited.                                                                                                                                 | Add an audit event for every export with the dataset, filters, and actor.                                                                                             |
+| 3.10 | Low      | REQUIREMENTS 14.1                              | "No paid component" is stated, but MUI X DataGrid Pro (multi-sort, row grouping, pinned columns) is paid. Tables are central to this app.                                                           | Add: use the MIT MUI X DataGrid or plain MUI Table. Do not import `@mui/x-data-grid-pro`.                                                                             |
+
+## 4. Suggestions for frontend.md
+
+| #   | Priority | Suggestion                                                                                                                                                                                                                                     |
+| --- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4.1 | Done     | List the approved stack (React, TypeScript strict, Vite, React Router, TanStack Query, React Hook Form, Zod, MUI, Vitest, RTL, Playwright) and say additions need approval. Remove the line that forbids TanStack Query and UI kits.           |
+| 4.2 | High     | Add the API rules from REQUIREMENTS 12: `Idempotency-Key` on financial writes, `If-Match` and `412` handling, the `{ code, message, request_id }` error shape, and "a timeout is an unknown result". The current status code list omits `412`. |
+| 4.3 | Medium   | Add the session rules from REQUIREMENTS 13: cookie auth with `credentials: "include"`, the CSRF header, and the idle warning. The file says "follow the established auth mechanism" but there is no code yet, so name it.                      |
+| 4.4 | Medium   | Add the writing rules from GLOBAL_CONTEXT (no em dashes, plain language) so generated UI text and comments follow them.                                                                                                                        |
+| 4.5 | Low      | The front matter name is `react-frontend-specialist` but the file is `frontend.md`, so the agent appears as "frontend". Rename one to match.                                                                                                   |
+| 4.6 | Low      | Example wording "Mark truck departed" describes an MVP 2 action. Use MVP 1 examples such as "Record payment" and "Issue invoice".                                                                                                              |
+
+## 5. Suggestions for GLOBAL_CONTEXT.md
+
+| #   | Priority | Suggestion                                                                                                     |
+| --- | -------- | -------------------------------------------------------------------------------------------------------------- |
+| 5.1 | Medium   | The Known Inconsistencies list now overlaps with this review. Point it here and keep only the one-line status. |
+| 5.2 | Low      | Add the legacy system description (once item 1.9 is settled) so agents know where migrated data comes from.    |
+| 5.3 | Low      | Add the health and version endpoints to Backend Contract Notes once item 3.1 is done.                          |
+
+## 6. Suggestions for DEPLOYMENT.md
+
+| #   | Priority | Suggestion                                                                                                                                                                                               |
+| --- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6.1 | Medium   | Section 7.1: add "regenerate the API client from the committed schema and fail if the output differs" (see 3.2).                                                                                         |
+| 6.2 | Medium   | Section 2: write down the local cookie decision (see 3.3).                                                                                                                                               |
+| 6.3 | Medium   | Section 5: add client IP forwarding for rate limits (see 3.4) and the origin secret header (see 3.5).                                                                                                    |
+| 6.4 | Low      | Section 9: `VITE_API_BASE_URL` value depends on item 1.2.                                                                                                                                                |
+| 6.5 | Low      | Section 15: fill in a first estimate once region and instance size are chosen. The earlier rough figure was about $6 to $15 per month for frontend plus one small server, before backups and monitoring. |
+
+## 7. Things that are consistent and should stay
+
+- One lot, SQLite on one server, server-side sessions, same-origin `/api`, and offline payments in MVP 1 agree across all four files.
+- Money in integer cents and USD only.
+- Customers separate from app users, with no customer logins until MVP 3.
+- Vehicles linked by plate plus jurisdiction or by USDOT number, with a unit number required for USDOT-only vehicles.
+- Financial records never hard-deleted. Corrections use void, credit note, and reversal.
+- Backups via the SQLite backup API, restore tested before cutover.
+- Staging required before MVP 3, Playwright not a deploy gate yet.
+
+## 8. Suggested order of fixes
+
+1. Items 1.1, 1.2, 1.3, 1.4 (document conflicts that would send an agent the wrong way).
+2. Items 3.1, 3.2, 3.3 (needed before the first line of code).
+3. Items 2.1 to 2.5 (business rule gaps that affect the data model).
+4. Everything else as time allows.
