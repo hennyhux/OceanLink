@@ -101,6 +101,14 @@ describe('vehicles list', () => {
 });
 
 describe('vehicle create', () => {
+  it('offers compact car as a vehicle type', async () => {
+    signedIn();
+    renderApp({ route: `/vehicles/new?customer_id=${PACIFIC}` });
+
+    await screen.findByRole('heading', { name: 'Add vehicle', level: 1 });
+    expect(screen.getByRole('radio', { name: 'Compact car' })).toBeInTheDocument();
+  });
+
   it('defaults to USDOT, never asks for a plate, and requires a unit number', async () => {
     signedIn();
     const user = userEvent.setup();

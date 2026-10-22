@@ -6,20 +6,23 @@ import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 
 // The MSW worker lives in public/ for dev. It has no place in a production bundle.
-function stripMockWorker(): Plugin {
+function stripMockWorker(keepForDemo: boolean): Plugin {
   return {
     name: 'oceanlink-strip-mock-worker',
     apply: 'build',
     async closeBundle() {
-      await rm(fileURLToPath(new URL('./dist/mockServiceWorker.js', import.meta.url)), {
-        force: true,
-      });
+      if (!keepForDemo) {
+        await rm(fileURLToPath(new URL('./dist/mockServiceWorker.js', import.meta.url)), {
+          force: true,
+        });
+      }
     },
   };
 }
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  const isDemoBuild = mode === 'demo' && env.VITE_DEMO_BUILD === 'true';
 
   // Mock mode is for local development only. A production bundle must never ship it.
   if (mode === 'production' && env.VITE_ENABLE_MOCKS === 'true') {
@@ -27,7 +30,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-    plugins: [react(), stripMockWorker()],
+    plugins: [react(), stripMockWorker(isDemoBuild)],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

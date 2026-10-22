@@ -99,6 +99,7 @@ One production environment for now. A permanent staging environment is required 
 - Frontend authentication, customer/vehicle workflows, per-vehicle monthly parking and customer account summary are implemented against development mocks. Real FastAPI integration is unverified.
 - The project is split into 3 MVPs (REQUIREMENTS.md section 3).
 - Current focus: MVP 1, customers, monthly vehicle parking and billing. Rates are vehicle-owned; debt and latest payment come from the customer ledger. Receipt recording/reversal and reviewed monthly-charge issuance with optional credit application are implemented against mocks. Full invoice management/PDFs, general-purpose payment allocation, refunds and real-backend integration remain unfinished.
+- The overview dashboard shows six KPIs from `GET /reports/summary`: overdue and open invoice balances, unbilled parking, this-month valid payments, total customers, and total trucks. Totals include inactive records; truck count includes truck-trailer combinations but excludes standalone trailers.
 - Later: MVP 2 (physical check-in/out, occupancy, walk-ins), MVP 3 (driver reservations and Stripe payments).
 - Before go-live: the decisions listed in DEPLOYMENT.md section 17, a tested restore, and the desktop data cutover.
 

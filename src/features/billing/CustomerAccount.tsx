@@ -26,7 +26,7 @@ export function CustomerAccount({ customerId }: { customerId: string }) {
   const [billed, setBilled] = useState(false);
   const money = (amount: number) => formatMoney(amount, i18n.resolvedLanguage ?? 'zh-CN');
   return (
-    <Box component="section" sx={{ py: 2 }}>
+    <Box component="section">
       <Typography component="h2" variant="h6" fontWeight={600} mb={2}>
         {t('account.title')}
       </Typography>

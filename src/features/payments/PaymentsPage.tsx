@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useSearchParams } from 'react-router';
 import type { Customer } from '@/features/customers/types';
 import { formatMoney } from '@/lib/money';
+import { MobilePrimaryAction } from '@/components/MobilePrimaryAction';
 import { usePayments } from './api';
 import { PAYMENT_METHODS, type Payment, type PaymentMethod, type PaymentStatus } from './model';
 import { PaymentDetailsDialog } from './PaymentDetailsDialog';
@@ -103,27 +104,42 @@ export function PaymentsPage({ customer }: { customer?: Customer }) {
     setParams(values);
   };
   return (
-    <Box component="section" sx={{ py: 2 }}>
+    <Box
+      component="section"
+      sx={{ py: customer ? 0 : 2, pb: !customer && !desktop ? 10 : undefined }}
+    >
       <Stack
         direction="row"
         justifyContent="space-between"
         alignItems="center"
-        flexWrap="wrap"
-        gap={2}
+        flexWrap={customer ? 'nowrap' : 'wrap'}
+        gap={1}
         mb={2}
       >
-        <Typography component={customer ? 'h2' : 'h1'} variant="h5">
+        <Typography
+          component={customer ? 'h2' : 'h1'}
+          variant={customer ? 'h6' : 'h5'}
+          fontWeight={customer ? 600 : undefined}
+          sx={{ minWidth: 0 }}
+        >
           {t(customer ? 'payments.customerHistory' : 'payments.title')}
         </Typography>
         <Button
-          variant="contained"
+          variant={customer ? 'outlined' : 'contained'}
+          size={customer ? 'small' : 'medium'}
           startIcon={<AddIcon />}
+          aria-label={customer ? t('payments.record') : undefined}
+          sx={{
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
+            display: customer || desktop ? 'inline-flex' : 'none',
+          }}
           onClick={() => {
             setRecordOpen(true);
             setSaved(null);
           }}
         >
-          {t('payments.record')}
+          {t(customer ? 'payments.recordShort' : 'payments.record')}
         </Button>
       </Stack>
       {saved && (
@@ -416,6 +432,16 @@ export function PaymentsPage({ customer }: { customer?: Customer }) {
         />
       )}
       {selectedId && <PaymentDetailsDialog id={selectedId} onClose={() => setSelectedId(null)} />}
+      {!customer && !desktop && (
+        <MobilePrimaryAction
+          label={t('payments.record')}
+          onClick={() => {
+            setRecordOpen(true);
+            setSaved(null);
+          }}
+          hideAt="lg"
+        />
+      )}
     </Box>
   );
 }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { Vehicle, VehicleType, VehicleWrite } from './types';
+import { VEHICLE_TYPES, type Vehicle, type VehicleType, type VehicleWrite } from './types';
 
 // "method" only controls which fields are shown first. It is never sent to the server.
 export type IdentifyMethod = 'usdot' | 'plate';
@@ -11,7 +11,7 @@ const text = (max: number) =>
 export const vehicleFormSchema = z
   .object({
     customer_id: z.string().min(1, 'vehicles.errors.customerRequired'),
-    vehicle_type: z.enum(['truck', 'trailer', 'combination']),
+    vehicle_type: z.enum(VEHICLE_TYPES),
     method: z.enum(['usdot', 'plate']),
     usdot_number: text(20),
     unit_number: text(50),

@@ -74,7 +74,7 @@ A trucking company can be a customer with multiple vehicles and invoices without
 | Entity or role | Purpose                                                                                       |
 | -------------- | --------------------------------------------------------------------------------------------- |
 | Customer       | Individual or business responsible for parking charges                                        |
-| Vehicle        | Truck, trailer, or attached combination associated with a customer                            |
+| Vehicle        | Truck, trailer, attached combination, or compact car associated with a customer               |
 | Operator       | Staff member handling routine customer, billing, and parking work                             |
 | Admin          | Owner or authorized staff member who manages access, configuration, and sensitive corrections |
 | Driver         | Self-service account introduced in MVP 3                                                      |
@@ -175,17 +175,16 @@ The common workflow should be easy to complete:
 
 **4.3 Dashboard**
 
-MVP 1 shows:
+MVP 1 overview shows six dashboard KPIs:
 
-- Active customers.
-- Vehicles with currently effective monthly parking.
-- Monthly parking capacity committed.
-- Unpaid invoice balance.
 - Overdue invoice balance.
-- Gross payments received during the selected period.
-- Refunds during the selected period.
-- Net cash collected during the selected period.
-- Invoices awaiting review or issuance.
+- Open issued-invoice balance, before unapplied customer credit.
+- Unbilled parking charges eligible for staff review and issuance.
+- Gross valid payments received during the current month, excluding reversals.
+- Total registered customers, including inactive customers.
+- Total registered trucks, counting trucks and combinations, including inactive vehicles; standalone trailers are excluded.
+
+Detailed collections, refunds, net cash, parking capacity commitments, and invoices awaiting review or issuance belong in reports and billing workflows, not the six-card overview.
 
 MVP 1 must not label monthly-parking vehicles as physically present.
 
@@ -201,6 +200,7 @@ Physical occupancy and live check-in information are introduced in MVP 2.
 - Invoice and statement PDFs must render Chinese characters correctly.
 - Financial amounts use USD formatting consistently.
 - Common actions must work on a laptop and tablet without horizontal page scrolling.
+- On mobile layouts, tabs with a primary create or record action use the same circular floating action button at the bottom right; desktop layouts keep the labeled action in the page header. Do not show a floating action where the tab has no primary create or record action, and keep scroll content clear of the button.
 
 **4.5 Out of scope**
 
@@ -441,7 +441,7 @@ A positive net balance means the customer owes money. A negative balance means t
 
 **7.7 Capacity and physical occupancy**
 
-Capacity is managed in categories, such as standard, long, and oversize.
+Capacity is managed in categories, such as standard, long, and oversize. The demo configures Standard and Oversize categories; the production backend must set their actual capacities and compatible vehicle types for the lot.
 
 The initial setup may use one category if that matches the actual lot. Adding categories must reflect real space and vehicle constraints.
 

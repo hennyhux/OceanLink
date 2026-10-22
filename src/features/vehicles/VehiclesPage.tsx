@@ -29,6 +29,7 @@ import { ActiveStatusChip } from '@/components/ActiveStatusChip';
 import { ErrorState } from '@/components/ErrorState';
 import { FlashMessage } from '@/components/FlashMessage';
 import { LoadingState } from '@/components/LoadingState';
+import { MobilePrimaryAction } from '@/components/MobilePrimaryAction';
 import { PageHeader } from '@/components/PageHeader';
 import { useListSearch } from '@/hooks/useListSearch';
 
@@ -107,6 +108,7 @@ export function VehiclesPage() {
             variant="contained"
             size="large"
             startIcon={<AddIcon />}
+            sx={{ display: { xs: 'none', lg: 'inline-flex' } }}
           >
             {t('vehicles.add')}
           </Button>
@@ -181,7 +183,7 @@ export function VehiclesPage() {
           <Typography color="text.secondary" sx={{ mt: 1 }}>
             {hasFilters ? t('vehicles.noResultsBody') : t('vehicles.emptyBody')}
           </Typography>
-          {!hasFilters && (
+          {!hasFilters && !isNarrow && (
             <Button
               component={RouterLink}
               to="/vehicles/new"
@@ -202,7 +204,7 @@ export function VehiclesPage() {
           </Typography>
 
           {isNarrow ? (
-            <Stack spacing={1.5} component="ul" sx={{ listStyle: 'none', p: 0, m: 0 }}>
+            <Stack spacing={1.5} component="ul" sx={{ listStyle: 'none', p: 0, m: 0, pb: 10 }}>
               {data.items.map((vehicle) => (
                 <Paper key={vehicle.id} component="li" variant="outlined" sx={{ p: 2 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
@@ -335,6 +337,9 @@ export function VehiclesPage() {
             </Stack>
           )}
         </>
+      )}
+      {isNarrow && (
+        <MobilePrimaryAction label={t('vehicles.add')} to="/vehicles/new" hideAt="lg" />
       )}
     </>
   );

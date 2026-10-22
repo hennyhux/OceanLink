@@ -1,6 +1,8 @@
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
@@ -11,6 +13,7 @@ import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import { alpha } from '@mui/material/styles';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router';
@@ -133,12 +136,28 @@ export function CustomerDetailPage() {
         ← {t('customers.backToList')}
       </Link>
       <PageHeader
-        title={customer.display_name}
+        title={
+          <Box
+            component="span"
+            sx={{
+              display: 'inline-flex',
+              px: 1.5,
+              py: 0.75,
+              border: 2,
+              borderColor: 'primary.dark',
+              borderRadius: 1,
+              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
+            }}
+          >
+            {customer.display_name}
+          </Box>
+        }
         description={`${t(`customers.type.${customer.type}`)}${
           customer.usdot_number ? ` · USDOT ${customer.usdot_number}` : ''
         }`}
         action={
           <Stack direction="row" spacing={1} alignItems="center">
+            <Chip label={t('customers.selected')} color="primary" />
             <ActiveStatusChip isActive={customer.is_active} />
             <Button
               component={RouterLink}
@@ -169,8 +188,12 @@ export function CustomerDetailPage() {
       )}
 
       <Stack spacing={2}>
-        <CustomerAccount customerId={customer.id} />
-        <PaymentsPage customer={customer} />
+        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
+          <CustomerAccount customerId={customer.id} />
+        </Paper>
+        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
+          <PaymentsPage customer={customer} />
+        </Paper>
         <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
           <Typography component="h2" variant="h6" fontWeight={600} sx={{ mb: 2 }}>
             {t('customers.sections.contact')}

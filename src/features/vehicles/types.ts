@@ -3,9 +3,9 @@
 
 import type { VehicleParking } from './parkingModel';
 
-export type VehicleType = 'truck' | 'trailer' | 'combination';
+export const VEHICLE_TYPES = ['truck', 'trailer', 'combination', 'compact'] as const;
 
-export const VEHICLE_TYPES: readonly VehicleType[] = ['truck', 'trailer', 'combination'];
+export type VehicleType = (typeof VEHICLE_TYPES)[number];
 
 export interface Vehicle {
   id: string;

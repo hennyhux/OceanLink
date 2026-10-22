@@ -64,6 +64,19 @@ describe('customers list', () => {
     expect(screen.getByText('Maria Lopez')).toBeInTheDocument();
   });
 
+  it('clearly marks the customer opened from the list as selected', async () => {
+    signedIn();
+    const user = userEvent.setup();
+    renderApp({ route: '/customers' });
+
+    await user.click(await screen.findByRole('link', { name: '远航货运有限公司' }));
+
+    expect(
+      await screen.findByRole('heading', { name: '远航货运有限公司', level: 1 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Selected customer')).toBeInTheDocument();
+  });
+
   it('shows inactive customers when the box is ticked', async () => {
     signedIn();
     const user = userEvent.setup();

@@ -56,6 +56,32 @@ Rules for mock mode:
 - Unmocked `/api` requests fail loudly. There is no silent fallback.
 - Mock handlers live in `src/mocks/` and are never imported by production code paths.
 
+### Temporary Amplify demo (synthetic data only)
+
+Use this build only for password-protected testing. It enables the mock API in a
+production-optimized bundle; it does not connect to a backend, and mock changes
+reset when the page reloads. Never enter real customer data or reuse real
+credentials.
+
+Build and package the contents of `dist` so `index.html` is at the ZIP root:
+
+```powershell
+npm.cmd run build:demo
+tar.exe -a -c -f .\OceanLink-demo.zip -C .\dist index.html assets mockServiceWorker.js
+```
+
+In AWS Amplify Hosting, create an app with **Deploy without Git** and upload
+`OceanLink-demo.zip`. Add this rewrite under **Rewrites and redirects** so direct
+navigation to React routes works:
+
+| Source | Target | Status |
+| --- | --- | --- |
+| `</^[^.]+$/>` | `/index.html` | `200 (Rewrite)` |
+
+Then enable Amplify access control with a temporary password for testers. The
+Amplify password is only an extra demo access barrier; it does not make the
+mock data suitable for real customer information.
+
 ## Checks
 
 ```bash
@@ -81,6 +107,8 @@ src/
 ## API contract used
 
 From REQUIREMENTS.md section 11.2, base path `/api/v1`:
+
+- `GET /reports/summary` returns the dashboard KPIs: `overdue_invoices`, `outstanding_invoices`, `unbilled_parking`, `payments_received_this_month`, `total_customers`, and `total_trucks`. Counts include inactive records; truck totals count trucks and combinations, excluding standalone trailers. Payment totals exclude reversed receipts.
 
 - `POST /auth/login` with `{ email, password }`
 - `GET /auth/session`
@@ -111,7 +139,7 @@ Vehicles (REQUIREMENTS.md sections 7.1, 10 and 11.3):
 - Duplicates among active vehicles return `409` with code `PLATE_ALREADY_IN_USE` (same plate and state) or `UNIT_NUMBER_ALREADY_IN_USE` (same USDOT and unit number).
 - Validation returns `422` with `field_errors: { field: [code] }`.
 
-Assumed vehicle fields: `id, version, customer_id, customer_name (read-only), vehicle_type (truck | trailer | combination), unit_number, plate_number, plate_jurisdiction, usdot_number, is_active, created_at, updated_at, parking`. `parking` is null until monthly service is configured.
+Assumed vehicle fields: `id, version, customer_id, customer_name (read-only), vehicle_type (truck | trailer | combination | compact), unit_number, plate_number, plate_jurisdiction, usdot_number, is_active, created_at, updated_at, parking`. `parking` is null until monthly service is configured.
 
 Vehicle monthly parking and customer accounts (proposed schemas, pending backend OpenAPI):
 

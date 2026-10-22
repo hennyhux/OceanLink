@@ -36,7 +36,15 @@ const operatorSession = {
 };
 
 function signedInAs(session: typeof adminSession) {
-  server.use(http.get(`${BASE}/auth/session`, () => HttpResponse.json(session)));
+  server.use(
+    http.get(`${BASE}/auth/session`, () =>
+      HttpResponse.json(session, {
+        headers: {
+          'Set-Cookie': `oceanlink_mock_session=${session.user.id}; Path=/; SameSite=Lax`,
+        },
+      }),
+    ),
+  );
 }
 
 describe('authentication', () => {

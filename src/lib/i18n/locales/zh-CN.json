@@ -87,7 +87,16 @@
     "emptyTitle": "暂时没有内容",
     "emptyBody": "OceanLink 已经准备就绪。车辆和账单功能会陆续在这里出现。",
     "nextStep": "下一步：先添加客户，再登记他们的车辆和每辆车的月租金。",
-    "goToCustomers": "前往客户页面"
+    "goToCustomers": "前往客户页面",
+    "loadFailed": "无法加载概览数据，未将余额默认显示为零。",
+    "metrics": {
+      "overdueInvoices": "逾期账单金额",
+      "outstandingInvoices": "未付账单余额",
+      "unbilledParking": "尚未开账单的月租费用",
+      "paymentsThisMonth": "本月已收款",
+      "totalCustomers": "客户总数",
+      "totalTrucks": "卡车总数"
+    }
   },
   "common": {
     "save": "保存",
@@ -134,6 +143,7 @@
     "add": "添加客户",
     "newTitle": "添加客户",
     "editTitle": "编辑客户",
+    "selected": "当前客户",
     "searchLabel": "搜索客户",
     "searchHint": "客户名称、联系人、电话、邮箱或 USDOT 号码",
     "showInactive": "显示已停用的客户",
@@ -239,7 +249,8 @@
       "label": "车辆类型",
       "truck": "卡车",
       "trailer": "挂车",
-      "combination": "车头加挂车"
+      "combination": "车头加挂车",
+      "compact": "小型汽车"
     },
     "method": {
       "label": "用 USDOT 号码还是车牌号码登记？",
@@ -357,6 +368,7 @@
     "title": "收款记录",
     "customerHistory": "这位客户的收款记录",
     "record": "记录收款",
+    "recordShort": "收款",
     "customer": "付款客户",
     "customerHint": "请选择实际付款的客户。已停用的客户仍可以支付原有欠款。",
     "amount": "实际收到的金额（美元）",

@@ -7,14 +7,15 @@ const apiBaseUrl =
     : rawBaseUrl;
 
 const mocksRequested = import.meta.env.VITE_ENABLE_MOCKS === 'true';
+const isDemoBuild = import.meta.env.MODE === 'demo' && import.meta.env.VITE_DEMO_BUILD === 'true';
 
-if (mocksRequested && import.meta.env.PROD) {
+if (mocksRequested && import.meta.env.PROD && !isDemoBuild) {
   throw new Error('Mock mode is not allowed in a production build.');
 }
 
 export const config = {
   apiBaseUrl: apiBaseUrl.replace(/\/+$/, ''),
-  // Mocks only run in a dev build and only when asked for explicitly.
-  mocksEnabled: mocksRequested && import.meta.env.DEV,
+  // Production demos are synthetic and explicit; normal production builds remain mock-free.
+  mocksEnabled: mocksRequested && (import.meta.env.DEV || isDemoBuild),
   languageStorageKey: 'oceanlink.language',
 } as const;

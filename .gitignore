@@ -1,5 +1,6 @@
 node_modules
 dist
+OceanLink-demo.zip
 coverage
 *.local
 *.tsbuildinfo

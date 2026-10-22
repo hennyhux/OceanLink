@@ -42,7 +42,7 @@ describe('vehicle-owned monthly parking', () => {
     renderApp({ route: `/vehicles/${id}/edit` });
     await screen.findByRole('heading', { name: 'Monthly parking' });
     await user.click(screen.getByRole('combobox', { name: 'Capacity category' }));
-    await user.click(await screen.findByRole('option', { name: 'Standard (demo)' }));
+    await user.click(await screen.findByRole('option', { name: 'Standard' }));
     await user.type(screen.getByLabelText(/Billing starts/), '2026-10-01');
     await user.type(screen.getByLabelText(/Monthly vehicle rate/), '200.29');
     await user.type(screen.getByLabelText(/Reason for this change/), 'Initial monthly rate');
@@ -78,6 +78,43 @@ describe('vehicle-owned monthly parking', () => {
     });
     expect(bad.status).toBe(409);
     expect((await vehiclesApi.get(id)).parking?.rate_history).toHaveLength(2);
+  });
+
+  it('offers standard and oversize pools with size-appropriate compact-car compatibility', async () => {
+    const pools = await vehiclesApi.pools();
+    expect(pools.map(({ label }) => label)).toEqual(['Standard', 'Oversize']);
+    expect(pools[0]?.allowed_vehicle_types).toContain('compact');
+    expect(pools[1]?.allowed_vehicle_types).not.toContain('compact');
+
+    const compact = await vehiclesApi.create({
+      customer_id: customerId,
+      vehicle_type: 'compact',
+      unit_number: null,
+      usdot_number: null,
+      plate_number: 'CMP 1001',
+      plate_jurisdiction: 'CA',
+    });
+    await expect(
+      vehiclesApi.saveParking(compact.id, compact.version, {
+        ...setup,
+        pool_id: 'mock-standard',
+      }),
+    ).resolves.toMatchObject({ parking: { pool_label: 'Standard' } });
+
+    const secondCompact = await vehiclesApi.create({
+      customer_id: customerId,
+      vehicle_type: 'compact',
+      unit_number: null,
+      usdot_number: null,
+      plate_number: 'CMP 1002',
+      plate_jurisdiction: 'CA',
+    });
+    await expect(
+      vehiclesApi.saveParking(secondCompact.id, secondCompact.version, {
+        ...setup,
+        pool_id: 'mock-oversize',
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'INVALID_PARKING' });
   });
 
   it('rejects stale writes and unauthorized changes to an existing rate', async () => {
@@ -165,7 +202,7 @@ describe('vehicle-owned monthly parking', () => {
     renderApp({ route: `/vehicles/${id}/edit` });
     await screen.findByRole('heading', { name: 'Monthly parking' });
     await user.click(screen.getByRole('combobox', { name: 'Capacity category' }));
-    await user.click(await screen.findByRole('option', { name: 'Standard (demo)' }));
+    await user.click(await screen.findByRole('option', { name: 'Standard' }));
     await user.type(screen.getByLabelText(/Billing starts/), '2026-10-01');
     await user.type(screen.getByLabelText(/Monthly vehicle rate/), '200');
     await user.type(screen.getByLabelText(/Reason for this change/), 'Initial rate');

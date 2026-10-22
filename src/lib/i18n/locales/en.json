@@ -87,7 +87,16 @@
     "emptyTitle": "Nothing to show yet",
     "emptyBody": "OceanLink is set up and ready. Vehicle and billing tools will appear here as they are added.",
     "nextStep": "Next step: add your customers, then register their vehicles and monthly rates.",
-    "goToCustomers": "Go to customers"
+    "goToCustomers": "Go to customers",
+    "loadFailed": "Could not load overview metrics. No zero values have been assumed.",
+    "metrics": {
+      "overdueInvoices": "Overdue invoices",
+      "outstandingInvoices": "Open invoice balance",
+      "unbilledParking": "Unbilled parking charges",
+      "paymentsThisMonth": "Payments received this month",
+      "totalCustomers": "Total customers",
+      "totalTrucks": "Total trucks"
+    }
   },
   "common": {
     "save": "Save",
@@ -134,6 +143,7 @@
     "add": "Add customer",
     "newTitle": "Add customer",
     "editTitle": "Edit customer",
+    "selected": "Selected customer",
     "searchLabel": "Search customers",
     "searchHint": "Customer name, contact, phone, email, or USDOT number",
     "showInactive": "Show inactive customers",
@@ -239,7 +249,8 @@
       "label": "Vehicle type",
       "truck": "Truck",
       "trailer": "Trailer",
-      "combination": "Truck with trailer"
+      "combination": "Truck with trailer",
+      "compact": "Compact car"
     },
     "method": {
       "label": "How do you identify this vehicle?",
@@ -357,6 +368,7 @@
     "title": "Payments received",
     "customerHistory": "Payment history",
     "record": "Record payment",
+    "recordShort": "Record",
     "customer": "Customer",
     "customerHint": "Choose the payer. Inactive customers can still pay existing debt.",
     "amount": "Amount received (USD)",

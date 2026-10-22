@@ -16,7 +16,13 @@ import {
 const pools: CapacityPool[] = [
   {
     id: 'mock-standard',
-    label: 'Standard (demo)',
+    label: 'Standard',
+    capacity: 10,
+    allowed_vehicle_types: ['truck', 'trailer', 'compact'],
+  },
+  {
+    id: 'mock-oversize',
+    label: 'Oversize',
     capacity: 10,
     allowed_vehicle_types: ['truck', 'trailer', 'combination'],
   },

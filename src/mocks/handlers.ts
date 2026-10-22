@@ -9,6 +9,7 @@ import { billingHandlers } from './billingHandlers';
 import { vehicleParkingHandlers } from './vehicleParkingHandlers';
 import { paymentHandlers } from './paymentHandlers';
 import { customerOverviewHandlers } from './customerOverviewHandlers';
+import { overviewHandlers } from './overviewHandlers';
 
 // Synthetic staff accounts. Development only. Not real people.
 export const MOCK_USERS: ReadonlyArray<User & { password: string }> = [
@@ -83,6 +84,7 @@ export function mockSessionCookie(userId: string): string {
 }
 
 export const handlers: HttpHandler[] = [
+  ...overviewHandlers,
   ...customerOverviewHandlers,
   http.post(`${BASE}/auth/login`, async ({ request }) => {
     if (!hasCsrfHeader(request)) {

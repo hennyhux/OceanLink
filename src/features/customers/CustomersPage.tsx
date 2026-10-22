@@ -29,6 +29,7 @@ import { ActiveStatusChip } from '@/components/ActiveStatusChip';
 import { ErrorState } from '@/components/ErrorState';
 import { FlashMessage } from '@/components/FlashMessage';
 import { LoadingState } from '@/components/LoadingState';
+import { MobilePrimaryAction } from '@/components/MobilePrimaryAction';
 import { PageHeader } from '@/components/PageHeader';
 import { useListSearch } from '@/hooks/useListSearch';
 import { formatMoney } from '@/lib/money';
@@ -100,15 +101,18 @@ export function CustomersPage() {
       <PageHeader
         title={t('customers.title')}
         action={
-          <Button
-            component={RouterLink}
-            to="/customers/new"
-            variant="contained"
-            size="large"
-            startIcon={<AddIcon />}
-          >
-            {t('customers.add')}
-          </Button>
+          <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <Button
+              component={RouterLink}
+              to="/customers/new"
+              variant="contained"
+              size="large"
+              startIcon={<AddIcon />}
+              sx={{ display: { xs: 'none', md: 'inline-flex' } }}
+            >
+              {t('customers.add')}
+            </Button>
+          </Box>
         }
       />
 
@@ -181,7 +185,7 @@ export function CustomersPage() {
           <Typography color="text.secondary" sx={{ mt: 1 }}>
             {hasFilters ? t('customers.noResultsBody') : t('customers.emptyBody')}
           </Typography>
-          {!hasFilters && (
+          {!hasFilters && !isNarrow && (
             <Button
               component={RouterLink}
               to="/customers/new"
@@ -202,7 +206,7 @@ export function CustomersPage() {
           </Typography>
 
           {isNarrow ? (
-            <Stack spacing={1.5} component="ul" sx={{ listStyle: 'none', p: 0, m: 0 }}>
+            <Stack spacing={1.5} component="ul" sx={{ listStyle: 'none', p: 0, m: 0, pb: 10 }}>
               {data.items.map((customer) => (
                 <Paper key={customer.id} component="li" variant="outlined" sx={{ p: 2 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
@@ -226,7 +230,12 @@ export function CustomersPage() {
                       {contactSummary(customer)}
                     </Typography>
                   )}
-                  <Stack direction="column" alignItems="center" gap={1} sx={{ mt: 1, width: '100%' }}>
+                  <Stack
+                    direction="column"
+                    alignItems="center"
+                    gap={1}
+                    sx={{ mt: 1, width: '100%' }}
+                  >
                     <Box
                       sx={{
                         ...metricSx,
@@ -409,6 +418,9 @@ export function CustomersPage() {
             </Stack>
           )}
         </>
+      )}
+      {isNarrow && (
+        <MobilePrimaryAction label={t('customers.add')} to="/customers/new" hideAt="md" />
       )}
     </>
   );
