@@ -10,7 +10,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { isNotFound } from '@/lib/api/errors';
 import { safeReturnTo } from '@/lib/navigation';
 
-import { emptyVehicleForm, formToWrite } from './formModel';
+import { emptyVehicleForm, formToCreate } from './formModel';
 import { useCreateVehicle } from './queries';
 import { VehicleForm } from './VehicleForm';
 
@@ -61,7 +61,7 @@ export function VehicleNewPage() {
         submitLabel={t('vehicles.add')}
         onCancel={() => void navigate(returnTo)}
         onSubmit={async (values) => {
-          await create.mutateAsync(formToWrite(values));
+          await create.mutateAsync(formToCreate(values));
           const state: FlashState = { flash: { messageKey: 'vehicles.created' } };
           void navigate(returnTo, { replace: true, state });
         }}

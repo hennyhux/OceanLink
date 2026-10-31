@@ -1,13 +1,8 @@
-import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
-import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
-import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
-import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
-import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
-import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Grid from '@mui/material/Grid';
+import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
@@ -16,75 +11,52 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router';
 
 import { PageHeader } from '@/components/PageHeader';
-import { useAuth } from '@/features/auth/useAuth';
 import { formatMoney } from '@/lib/money';
 import { useOverviewMetrics } from './api';
 
 export function OverviewPage() {
   const { t, i18n } = useTranslation();
-  const { user } = useAuth();
   const theme = useTheme();
   const metrics = useOverviewMetrics();
-  const money = (amount: number) =>
-    formatMoney(amount, i18n.resolvedLanguage ?? 'zh-CN');
-  const cards = metrics.data
-    ? [
-        {
-          key: 'overdueInvoices',
-          value: money(metrics.data.overdue_invoices.amount),
-          icon: <WarningAmberOutlinedIcon aria-hidden />,
-          tone: 'error' as const,
-          featured: true,
-          to: '/customers',
-        },
-        {
-          key: 'outstandingInvoices',
-          value: money(metrics.data.outstanding_invoices.amount),
-          icon: <AccountBalanceWalletOutlinedIcon aria-hidden />,
-          tone: 'warning' as const,
-          featured: true,
-          to: '/customers',
-        },
-        {
-          key: 'unbilledParking',
-          value: money(metrics.data.unbilled_parking.amount),
-          icon: <ReceiptLongOutlinedIcon aria-hidden />,
-          tone: 'info' as const,
-          featured: false,
-          to: '/customers',
-        },
-        {
-          key: 'paymentsThisMonth',
-          value: money(metrics.data.payments_received_this_month.amount),
-          icon: <PaymentsOutlinedIcon aria-hidden />,
-          tone: 'success' as const,
-          featured: false,
-          to: '/payments',
-        },
-        {
-          key: 'totalCustomers',
-          value: String(metrics.data.total_customers),
-          icon: <GroupsOutlinedIcon aria-hidden />,
-          tone: 'primary' as const,
-          featured: false,
-          to: '/customers',
-        },
-        {
-          key: 'totalTrucks',
-          value: String(metrics.data.total_trucks),
-          icon: <LocalShippingOutlinedIcon aria-hidden />,
-          tone: 'secondary' as const,
-          featured: false,
-          to: '/vehicles',
-        },
-      ]
-    : [];
+  const money = (amount: number) => formatMoney(amount, i18n.resolvedLanguage ?? 'zh-CN');
+  const secondaryTextColor = alpha(theme.palette.text.primary, 0.76);
 
   return (
-    <>
+    <Stack
+      spacing={3}
+      sx={{
+        width: '100%',
+        maxWidth: 960,
+        mx: 'auto',
+        px: { xs: 0.5, sm: 0 },
+        '& > :first-of-type': { mb: 0 },
+      }}
+    >
       <PageHeader
         title={t('overview.title')}
-        description={user ? t('overview.welcome', { name: user.name }) : undefined}
+        titleSx={{ fontSize: { xs: '1.75rem', sm: '2rem' }, lineHeight: 1.2 }}
+        action={
+          <Stack direction="row" flexWrap="wrap" gap={1}>
+            <Button
+              component={RouterLink}
+              to="/payments?record=1"
+              variant="contained"
+              size="large"
+              sx={{ minHeight: 48 }}
+            >
+              {t('overview.actions.recordPayment')}
+            </Button>
+            <Button
+              component={RouterLink}
+              to="/customers/new"
+              variant="outlined"
+              size="large"
+              sx={{ minHeight: 48 }}
+            >
+              {t('overview.actions.addCustomer')}
+            </Button>
+          </Stack>
+        }
       />
       {metrics.isPending && <Typography role="status">{t('app.loading')}</Typography>}
       {metrics.isError && (
@@ -96,86 +68,239 @@ export function OverviewPage() {
         </Alert>
       )}
       {metrics.data && (
-        <Grid container spacing={2.5}>
-          {cards.map((card) => (
-            <Grid
-              key={card.key}
-              size={card.featured ? { xs: 12, sm: 6 } : { xs: 12, sm: 6, lg: 3 }}
-            >
-              <Paper
-                variant="outlined"
-                component={RouterLink}
-                to={card.to}
-                sx={{
-                  height: '100%',
-                    display: 'block',
-                    minHeight: card.featured ? 172 : 148,
-                  p: card.featured ? 3 : 2.5,
-                  borderTop: card.featured ? 5 : 3,
-                  borderTopColor: `${card.tone}.main`,
-                  borderRadius: 1,
-                  bgcolor: alpha(theme.palette[card.tone].main, card.featured ? 0.09 : 0.045),
-                  color: 'inherit',
-                  textDecoration: 'none',
-                  transition: theme.transitions.create(['transform', 'box-shadow', 'border-color']),
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: theme.shadows[3],
-                    borderColor: `${card.tone}.main`,
-                  },
-                  '&:focus-visible': {
-                    outline: `3px solid ${theme.palette.primary.main}`,
-                    outlineOffset: 2,
-                  },
-                }}
+        <>
+          <Paper
+            variant="outlined"
+            sx={{
+              p: { xs: 2, sm: 3 },
+              borderRadius: 1,
+              bgcolor: alpha(
+                theme.palette.primary.main,
+                theme.palette.mode === 'dark' ? 0.2 : 0.08,
+              ),
+              borderColor: alpha(
+                theme.palette.primary.main,
+                theme.palette.mode === 'dark' ? 0.5 : 0.22,
+              ),
+            }}
+          >
+            <Stack spacing={1.5}>
+              <Box>
+                <Typography
+                  variant="body2"
+                  fontWeight={600}
+                  sx={{ fontSize: 16, color: secondaryTextColor }}
+                >
+                  {t('overview.owed.total')}
+                </Typography>
+                <Typography
+                  component="p"
+                  sx={{
+                    mt: 0.5,
+                    mb: 0,
+                    fontSize: { xs: '2rem', sm: '2.25rem' },
+                    lineHeight: 1.15,
+                    fontWeight: 700,
+                    fontVariantNumeric: 'tabular-nums',
+                    color:
+                      metrics.data.outstanding_invoices.amount > 0 ? 'error.main' : 'text.primary',
+                  }}
+                >
+                  {money(metrics.data.outstanding_invoices.amount)}
+                </Typography>
+              </Box>
+              <Stack
+                component="ul"
+                spacing={1}
+                sx={{ listStyle: 'none', m: 0, p: 0, maxWidth: 420 }}
               >
-                <Stack direction="row" justifyContent="space-between" alignItems="center" gap={{ xs: 1.5, sm: 2 }}>
-                  <Box sx={{ minWidth: 0, flex: '1 1 auto' }}>
-                    <Typography variant="body2" color="text.secondary" fontWeight={600}>
-                      {t(`overview.metrics.${card.key}`)}
-                    </Typography>
-                    <Typography
-                      component="p"
-                      variant={card.featured ? 'h3' : 'h4'}
-                      fontWeight={800}
-                      sx={{
-                        mt: 1,
-                        mb: 0,
-                        display: 'inline-flex',
-                        maxWidth: '100%',
-                        px: 1,
-                        py: 0.25,
-                        borderRadius: 1,
-                        color: `${card.tone}.dark`,
-                        bgcolor: alpha(theme.palette[card.tone].main, 0.12),
-                        fontSize: { xs: '1.875rem', sm: card.featured ? '3rem' : '2.125rem' },
-                        lineHeight: 1.15,
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      {card.value}
-                    </Typography>
-                  </Box>
-                  <Box
+                <Stack
+                  component="li"
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="baseline"
+                  columnGap={2}
+                >
+                  <Link
+                    component={RouterLink}
+                    to="/customers?overdue=1"
+                    color="error.main"
+                    fontWeight={650}
+                    sx={{ fontSize: 16 }}
+                  >
+                    {t('overview.owed.pastDue')}
+                  </Link>
+                  <Typography
+                    component="span"
+                    color="error.main"
                     sx={{
-                      display: 'grid',
-                      placeItems: 'center',
-                      flex: '0 0 auto',
-                      width: card.featured ? 52 : 44,
-                      height: card.featured ? 52 : 44,
-                      borderRadius: 1,
-                      color: `${card.tone}.dark`,
-                      bgcolor: alpha(theme.palette[card.tone].main, 0.1),
+                      fontSize: '1.25rem',
+                      fontWeight: 650,
+                      fontVariantNumeric: 'tabular-nums',
                     }}
                   >
-                    {card.icon}
-                  </Box>
+                    {money(metrics.data.overdue_invoices.amount)}
+                  </Typography>
                 </Stack>
+                <Stack
+                  component="li"
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="baseline"
+                  columnGap={2}
+                >
+                  <Typography
+                    component="span"
+                    fontWeight={600}
+                    sx={{ fontSize: 16, color: secondaryTextColor }}
+                  >
+                    {t('overview.owed.notYetDue')}
+                  </Typography>
+                  <Typography
+                    component="span"
+                    sx={{
+                      fontSize: '1.25rem',
+                      fontWeight: 600,
+                      fontVariantNumeric: 'tabular-nums',
+                      color: secondaryTextColor,
+                    }}
+                  >
+                    {money(
+                      Math.max(
+                        0,
+                        metrics.data.outstanding_invoices.amount -
+                          metrics.data.overdue_invoices.amount,
+                      ),
+                    )}
+                  </Typography>
+                </Stack>
+              </Stack>
+            </Stack>
+          </Paper>
+
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Paper
+                variant="outlined"
+                sx={{
+                  height: '100%',
+                  p: { xs: 2, sm: 2.5 },
+                  borderRadius: 1,
+                  bgcolor: 'background.paper',
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  fontWeight={700}
+                  sx={{ fontSize: 16, color: secondaryTextColor }}
+                >
+                  {t('overview.metrics.paymentsThisMonth')}
+                </Typography>
+                <Typography
+                  sx={{
+                    mt: 0.5,
+                    fontSize: '1.5rem',
+                    lineHeight: 1.35,
+                    fontWeight: 650,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {money(metrics.data.payments_received_this_month.amount)}
+                </Typography>
               </Paper>
             </Grid>
-          ))}
-        </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Paper
+                variant="outlined"
+                sx={{
+                  height: '100%',
+                  p: { xs: 2, sm: 2.5 },
+                  borderRadius: 1,
+                  bgcolor: 'background.paper',
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  fontWeight={700}
+                  sx={{ fontSize: 16 }}
+                >
+                  {t('overview.metrics.unbilledParking')}
+                </Typography>
+                <Typography
+                  sx={{
+                    mt: 0.5,
+                    fontSize: '1.5rem',
+                    lineHeight: 1.35,
+                    fontWeight: 650,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {money(metrics.data.unbilled_parking.amount)}
+                </Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Stack direction="row" flexWrap="wrap" gap={1}>
+            <Link
+              component={RouterLink}
+              to="/customers"
+              underline="none"
+              sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0.75,
+                minHeight: 48,
+                px: 1.5,
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                bgcolor: 'background.paper',
+                color: 'primary.main',
+                fontSize: 16,
+                fontWeight: 600,
+                '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.08) },
+                '&:focus-visible': {
+                  outline: '3px solid',
+                  outlineColor: 'primary.main',
+                  outlineOffset: 2,
+                },
+              }}
+            >
+              {t('overview.metrics.totalCustomers')}:{' '}
+              <strong>{metrics.data.total_customers}</strong>
+            </Link>
+            <Link
+              component={RouterLink}
+              to="/vehicles"
+              underline="none"
+              sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0.75,
+                minHeight: 48,
+                px: 1.5,
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                bgcolor: 'background.paper',
+                color: 'primary.main',
+                fontSize: 16,
+                fontWeight: 600,
+                '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.08) },
+                '&:focus-visible': {
+                  outline: '3px solid',
+                  outlineColor: 'primary.main',
+                  outlineOffset: 2,
+                },
+              }}
+            >
+              {t('overview.metrics.totalTrucks')}: <strong>{metrics.data.total_trucks}</strong>
+            </Link>
+          </Stack>
+        </>
       )}
-    </>
+    </Stack>
   );
 }

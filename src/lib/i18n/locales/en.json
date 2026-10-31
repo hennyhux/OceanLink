@@ -83,12 +83,30 @@
   },
   "overview": {
     "title": "Overview",
-    "welcome": "Welcome, {{name}}.",
+    "reportingPeriod": "Current balances · Payments received this month",
     "emptyTitle": "Nothing to show yet",
     "emptyBody": "OceanLink is set up and ready. Vehicle and billing tools will appear here as they are added.",
     "nextStep": "Next step: add your customers, then register their vehicles and monthly rates.",
     "goToCustomers": "Go to customers",
     "loadFailed": "Could not load overview metrics. No zero values have been assumed.",
+    "owed": {
+      "total": "Customers owe in total",
+      "pastDue": "Past due — follow up",
+      "notYetDue": "Not due yet"
+    },
+    "actions": {
+      "recordPayment": "Record payment",
+      "addCustomer": "Add customer"
+    },
+    "balanceDue": {
+      "title": "Customers with a balance due",
+      "customerColumn": "Customer",
+      "amountColumn": "Balance due",
+      "viewAll": "View all {{count}}",
+      "openAccount": "Open account",
+      "empty": "No customers currently have a balance due.",
+      "loadFailed": "Could not load customers with a balance due."
+    },
     "metrics": {
       "overdueInvoices": "Overdue invoices",
       "outstandingInvoices": "Open invoice balance",
@@ -144,9 +162,12 @@
     "newTitle": "Add customer",
     "editTitle": "Edit customer",
     "selected": "Selected customer",
+    "showContactDetails": "More contact details",
+    "hideContactDetails": "Hide contact details",
     "searchLabel": "Search customers",
     "searchHint": "Customer name, contact, phone, email, or USDOT number",
     "showInactive": "Show inactive customers",
+    "showOverdue": "Show overdue customers",
     "emptyTitle": "No customers yet",
     "emptyBody": "Add your first customer, then register their vehicles and monthly parking rates.",
     "noResultsTitle": "No customers match",
@@ -311,16 +332,17 @@
     "inactiveBanner": "This vehicle is inactive and is not shown in the vehicle list by default.",
     "ownerNote": "The customer cannot be changed here.",
     "onCustomer": {
+      "total": "Active vehicles: {{count}}",
       "empty": "No vehicles yet for this customer."
     }
   },
   "parking": {
     "title": "Monthly parking",
+    "createHint": "Leave blank to set up monthly parking later. Enter 0 for free parking.",
     "rate": "Monthly vehicle rate (USD)",
     "currentRate": "Current monthly rate",
-    "category": "Capacity category",
-    "choose": "Choose an option",
     "starts": "Billing starts",
+    "cycleHint": "Each full monthly charge period starts on this date and repeats monthly.",
     "ends": "Service ends (optional)",
     "endHint": "Enter the first day without service. Parking through October 31 ends on November 1.",
     "effective": "Rate effective date",
@@ -332,16 +354,9 @@
     "noSetup": "No monthly parking is set up for this vehicle yet.",
     "notConfigured": "Not set up",
     "openEnded": "No end date",
-    "anchor": "Billing day (1 to 31)",
-    "paymentTerms": "Default payment terms",
-    "customerDefaults": "Billing defaults",
-    "defaultsHint": "Used for new vehicle parking setups only. Existing rates, dates and issued invoices do not change.",
-    "defaultTerms": "Blank means payment is due at the start of the service period.",
-    "inherit": "Uses this customer's billing day: {{day}}.",
     "noDebt": "A monthly rate is not an amount owed. Only issued invoices and recorded payments affect the customer balance.",
     "adminOnly": "An administrator must change an existing rate or service end date.",
     "stale": "This vehicle changed elsewhere. Reload the latest record and review it before saving again.",
-    "noCapacity": "There is not enough compatible capacity for the full service interval.",
     "invalidFuture": "Choose a future date after the last scheduled rate change. Existing history cannot be overwritten.",
     "saveFailed": "Could not confirm the save. Your entries are kept. Check the vehicle before repeating the operation.",
     "required": "Please fill in this field.",
@@ -350,7 +365,6 @@
     "invalidRate": "Enter a USD amount with no more than two decimal places.",
     "invalidEnd": "The end date must be after the start date.",
     "invalidEffective": "The rate date must fall within the service period.",
-    "invalidAnchor": "Enter a whole day from 1 to 31.",
     "confirmEnd": "Confirm service date change",
     "endReview": "Changing the end date changes parking entitlement, not existing debt. Check issued invoices and handle any credit or refund separately before confirming.",
     "endBeforeArchive": "End this vehicle's monthly parking before deactivating it. Its history and any debt will be kept."
@@ -360,15 +374,23 @@
     "searchShort": "Customer or reference",
     "referenceSearch": "Search reference",
     "filters": "Filters",
+    "searchAndFilters": "Search and filters",
+    "activeFilters": "Active filters",
     "applyFilters": "Apply filters",
     "clearFilters": "Clear filters",
     "dateColumn": "Received",
     "amountColumn": "Amount",
     "receiptColumn": "Receipt",
     "title": "Payments received",
-    "customerHistory": "Payment history",
+    "customerHistory": "Transaction history",
+    "noTransactions": "No transactions match this view.",
     "record": "Record payment",
     "recordShort": "Record",
+    "reviewTitle": "Review payment details",
+    "review": "Review payment",
+    "backToEdit": "Back to edit",
+    "confirmRecord": "Confirm and record",
+    "recordReviewWarning": "Check the customer, amount, date and method carefully. Only an administrator can reverse a recorded payment.",
     "customer": "Customer",
     "customerHint": "Choose the payer. Inactive customers can still pay existing debt.",
     "amount": "Amount received (USD)",
@@ -443,7 +465,28 @@
     "reviewHint": "Periods are billed in advance. End dates are exclusive. Issuing creates invoice charges, not a new payment.",
     "uncertain": "The result is not confirmed. Check the result before issuing again; your original request will be reused.",
     "changed": "The parking details, balance or billed periods changed. Reload and review a fresh preview before issuing.",
-    "failed": "Could not issue charges. Review the preview and try again."
+    "failed": "Could not issue charges. Review the preview and try again.",
+    "manualAction": "Add one-time charge",
+    "manualHistoryTitle": "One-time adjustments",
+    "manualStatusIssued": "Issued",
+    "manualTitle": "Add customer debit",
+    "manualReviewTitle": "Review one-time charge",
+    "manualInfo": "Adds a separate invoice charge to this customer. It does not record a payment or collect money.",
+    "manualDescription": "Charge description",
+    "manualAmount": "Amount (USD)",
+    "manualDueDate": "Due date",
+    "manualReviewWarning": "Confirm the description, amount, and due date. Issuing this charge increases the customer’s outstanding balance; no payment is recorded.",
+    "manualBack": "Back to edit",
+    "manualReview": "Review charge",
+    "manualConfirm": "Issue charge",
+    "manualCheckResult": "Check issue result",
+    "manualUncertain": "The issue result is not confirmed. Check again to safely reconcile the same invoice; do not create another charge.",
+    "manualFailed": "Could not issue this charge. Review the details and try again.",
+    "manualDescriptionRequired": "Enter a description for this charge.",
+    "manualDescriptionLong": "Keep the description within 200 characters.",
+    "manualAmountInvalid": "Enter an amount greater than zero, with up to two decimal places.",
+    "manualDueDateRequired": "Choose a valid due date.",
+    "manualIssued": "Invoice {{number}} issued for {{amount}}. The customer balance is updated."
   },
   "account": {
     "creditBalance": "Customer credit",
@@ -471,6 +514,6 @@
     }
   },
   "dev": {
-    "mockBanner": "Development mock mode. Nothing here is real data or a real server."
+    "mockBanner": "Demo data · Changes reset on reload."
   }
 }

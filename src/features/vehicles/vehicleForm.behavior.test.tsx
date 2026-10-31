@@ -261,7 +261,7 @@ describe('vehicle list: search and return', () => {
 
     await screen.findByRole('link', { name: 'Unit 14' });
     await user.click(screen.getByRole('link', { name: 'Edit Unit 14' }));
-    await screen.findByRole('heading', { name: 'Edit vehicle', level: 1 });
+    await screen.findByRole('heading', { name: 'Unit 14', level: 1 });
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(await screen.findByRole('searchbox', { name: 'Search vehicles' })).toHaveValue(

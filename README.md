@@ -122,7 +122,7 @@ Assumptions made where the spec is silent (to confirm against the backend OpenAP
 
 Customers (REQUIREMENTS.md sections 10 and 11.3):
 
-- `GET /customers?q=&include_inactive=&page=&page_size=` returns `{ items, page, page_size, total }`. `q` matches name, contact, phone, email, and USDOT.
+- `GET /customers?q=&include_inactive=&overdue_only=&page=&page_size=` returns `{ items, page, page_size, total }`. `q` matches name, contact, phone, email, and USDOT; `overdue_only=true` returns customers with a positive overdue invoice balance.
 - `POST /customers` creates one. `GET /customers/{id}` reads one.
 - `PATCH /customers/{id}` with `If-Match: "<version>"` updates fields or `is_active`. Stale version returns `412`.
 - Duplicate USDOT among active customers returns `409` with code `USDOT_ALREADY_IN_USE`.
@@ -133,7 +133,7 @@ Assumed customer fields: `id, version, type (business | individual), display_nam
 Vehicles (REQUIREMENTS.md sections 7.1, 10 and 11.3):
 
 - `GET /vehicles?q=&customer_id=&include_inactive=&page=&page_size=` returns `{ items, page, page_size, total }`. `q` matches unit number, plate (ignoring spaces and dashes), USDOT, and customer name.
-- `POST /vehicles` creates one. `GET /vehicles/{id}` reads one.
+- `POST /vehicles` creates one. The add-vehicle form optionally accepts a monthly parking amount and requires a billing start date when an amount is entered. A blank amount leaves parking unconfigured; zero means free parking. The request includes optional `parking: { starts_on, ends_on: null, monthly_rate: { amount, currency: "USD" }, effective_on, reason }`, with the initial effective date equal to the start date. The backend must validate and create the vehicle and parking together in one transaction; invalid parking must not leave a vehicle behind. `GET /vehicles/{id}` reads one.
 - `PATCH /vehicles/{id}` with `If-Match: "<version>"` updates fields or `is_active`. The owner (`customer_id`) is never sent in an edit; changing owner is a separate workflow.
 - A vehicle needs a plate with its state, or a USDOT number, or both. A USDOT-only vehicle also needs a unit number.
 - Duplicates among active vehicles return `409` with code `PLATE_ALREADY_IN_USE` (same plate and state) or `UNIT_NUMBER_ALREADY_IN_USE` (same USDOT and unit number).
@@ -141,24 +141,28 @@ Vehicles (REQUIREMENTS.md sections 7.1, 10 and 11.3):
 
 Assumed vehicle fields: `id, version, customer_id, customer_name (read-only), vehicle_type (truck | trailer | combination | compact), unit_number, plate_number, plate_jurisdiction, usdot_number, is_active, created_at, updated_at, parking`. `parking` is null until monthly service is configured.
 
+Customer overview highlights positive outstanding balances and overdue amounts in red; zero balances and customer credit stay neutral. The Customers tab also uses red balance badges for positive outstanding amounts in both its desktop table and mobile cards, while preserving neutral zero and green credit badges. The account summary no longer shows an active-truck count; the customer's vehicle list shows the server-reported total of active vehicles of all types.
+
+The Overview total owed is red when positive. Recording/reversing payments and issuing monthly or one-time charges invalidate both the Overview metrics and customer-list balances, so returning to either screen refreshes the totals immediately rather than waiting for the query cache to expire. Parking saves refresh the Overview's unbilled total; new customers and vehicles refresh its record counts.
+
 Vehicle monthly parking and customer accounts (proposed schemas, pending backend OpenAPI):
 
 - No separate parking contracts, approval workflow or contract endpoints remain. Old `/agreements` bookmarks redirect to `/vehicles`.
-- `POST /vehicles/{id}/parking` with `If-Match` saves `{ pool_id, starts_on, ends_on, monthly_rate: { amount, currency: "USD" }, effective_on, reason }` and returns the updated vehicle. Dates are business dates and service ends are exclusive. Initial effective date equals service start. Each vehicle consumes one compatible capacity unit for the interval.
-- Returned `parking` adds `pool_label`, copied `billing_anchor_day` and `payment_terms`, and append-only `rate_history: [{ effective_on, monthly_rate, reason }]`. Reads select the current price by effective date; future prices remain scheduled without rewriting history.
-- Customer `billing_anchor_day` (default 1) and `payment_terms` (blank means due at period start) are editable defaults for new parking setups. Changes do not rewrite an existing setup or invoice.
-- Existing rate and end-date changes require admin access. New rates must have a future effective date after the last scheduled change. Initial start/category are immutable in ordinary edits. End monthly service before archiving a vehicle; preserve its history and debt.
-- `GET /lots/current/capacity-pools` is a proposed configuration dependency: `{ id, label, capacity, allowed_vehicle_types }[]`. The real backend must supply actual categories and enforce interval capacity and compatibility atomically. No production capacity is hardcoded in the frontend.
+- `POST /vehicles/{id}/parking` with `If-Match` saves `{ starts_on, ends_on, monthly_rate: { amount, currency: "USD" }, effective_on, reason }` and returns the updated vehicle. Dates are business dates and service ends are exclusive. Initial effective date equals service start. Monthly parking has no capacity limit, pool, or vehicle-type category.
+- Returned `parking` adds append-only `rate_history: [{ effective_on, monthly_rate, reason }]`. Reads select the current price by effective date; future prices remain scheduled without rewriting history.
+- Monthly periods begin on the vehicle's service start date and recur monthly on that day. Use the last day of shorter months, then restore the original day when possible. The first period is a full month from the service start; there are no customer billing-day or payment-term defaults.
+- Existing rate and end-date changes require admin access. New rates must have a future effective date after the last scheduled change. Initial start is immutable in ordinary edits. End monthly service before archiving a vehicle; preserve its history and debt.
 - `GET /customers/{id}/ledger` returns `{ as_of, outstanding, overdue, unapplied_credit, net_balance, last_payment }`. Monetary fields use `{ amount, currency: "USD" }`. `last_payment` is null or `{ id, amount, effective_on, method }`, selected from valid non-reversed receipts by effective date and a deterministic tie-break. Opening credit is not a payment. Net balance is outstanding minus unapplied credit, calculated by the backend.
 - Displayed balances are based on issued invoices and valid payments, not vehicle monthly rates. Saving a rate updates monthly parking and unbilled totals. Staff choose **Review monthly charges** and explicitly issue the reviewed charges before they become debt.
 - `POST /billing-runs/preview` accepts `{ customer_id, through_date }` and returns a run with vehicle-period lines, total, available credit, projected net amount due and skipped-period count. It includes unbilled periods starting through the selected date. Periods are billed in advance, partial periods are prorated by calendar days, effective-dated rate changes are honored, and cent amounts use half-up rounding.
 - `POST /billing-runs/{id}/issue` accepts `{ apply_credit: boolean }` and `Idempotency-Key`. Issuance creates immutable invoice snapshots and optionally applies existing credit to the new invoices atomically. Changed vehicle/customer versions or financial state require a fresh review (`412`); source periods cannot be billed twice (`409`). Retrying identical content/key returns the original result.
 - The ledger also returns `monthly_parking` and `unbilled_parking` as Money values. These are informational until issuance and are not added directly to debt. Full invoice management/PDFs and general-purpose payment reallocation remain unfinished.
-- Mock mode uses a synthetic category with capacity 10 and synthetic ledger history for the first demo customer ($150 due, $50 overdue, last payment $300 by bank transfer). Vehicles start without monthly parking. Receipt recording and reversal now update the mock ledger. Data resets on reload; mock effective dates use UTC. This is not a production accounting engine or durable audit store. Real integration remains unverified.
+- Mock mode uses synthetic ledger history for the first demo customer ($150 due, $50 overdue, last payment $300 by bank transfer). Vehicles start without monthly parking. Receipt recording and reversal now update the mock ledger. Data resets on reload; mock effective dates use UTC. This is not a production accounting engine or durable audit store. Real integration remains unverified.
 - There are no persisted contract records in this frontend. A future legacy-data migration must preserve source history and obtain explicit per-vehicle price allocations rather than silently splitting combined legacy totals.
 
 Recorded payments (proposed backend contract):
 
+- Customer transaction history paginates payments and manual charges independently, 20 items per page, using separate Previous/Next controls. Search and filter changes reset both lists to page 1. Manual charges use `GET /invoices` with `customer_id`, `source_type=manual`, optional `q`/`from`/`to`, `page`, and `page_size`; the response must include `{ items, page, page_size, total }`. Scrolling does not load additional records.
 - This workflow records cash/check/transfer/card payments already collected outside OceanLink. It never charges a card or moves money.
 - `GET /payments` accepts `customer_id`, `q` (customer name/reference), inclusive business-date `from`/`to`, `method`, `status`, `page`, and `page_size`. Lists use the standard paged shape and sort by effective date, creation timestamp and ID, descending.
 - `POST /payments` requires `Idempotency-Key` and `{ customer_id, amount: { amount, currency: "USD" }, effective_on, method, reference, notes }`. Amounts are positive integer cents. Methods: `cash | check | bank_transfer | external_card | other`. Date received cannot be in the future in the configured lot time zone. Existing inactive customers may pay debt.

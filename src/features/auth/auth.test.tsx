@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HttpResponse, http } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { server } from '@/mocks/server';
 import { renderApp } from '@/test/renderApp';
@@ -45,6 +45,19 @@ function signedInAs(session: typeof adminSession) {
       }),
     ),
   );
+}
+
+function useMobileLayout() {
+  vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+    matches: query.includes('max-width'),
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }));
 }
 
 describe('authentication', () => {
@@ -114,6 +127,23 @@ describe('authentication', () => {
       await screen.findByRole('heading', { name: 'Sign in to OceanLink' }),
     ).toBeInTheDocument();
     expect(queryClient.getQueryData(['customers', 'list'])).toBeUndefined();
+  });
+
+  it('places a labeled sign-out action in the mobile navigation menu', async () => {
+    signedInAs(adminSession);
+    useMobileLayout();
+    const user = userEvent.setup();
+    renderApp({ route: '/' });
+
+    await screen.findByRole('heading', { name: 'Overview' });
+    expect(screen.queryByRole('button', { name: 'Sign out' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    const signOut = await screen.findByRole('button', { name: 'Sign out' });
+    expect(signOut).toHaveTextContent('Sign out');
+    await user.click(signOut);
+    expect(
+      await screen.findByRole('heading', { name: 'Sign in to OceanLink' }),
+    ).toBeInTheDocument();
   });
 
   it('blocks an operator from the admin-only settings route and hides its nav item', async () => {

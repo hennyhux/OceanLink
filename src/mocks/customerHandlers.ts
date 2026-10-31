@@ -36,8 +36,6 @@ function makeCustomer(
     is_active: true,
     created_at: now,
     updated_at: now,
-    billing_anchor_day: 1,
-    payment_terms: '',
     ...partial,
   };
 }
@@ -137,15 +135,18 @@ export function listMockCustomers({
   includeInactive = false,
   page = 1,
   pageSize = 20,
+  predicate,
 }: {
   q?: string;
   includeInactive?: boolean;
   page?: number;
   pageSize?: number;
+  predicate?: (customer: Customer) => boolean;
 } = {}): Paged<Customer> {
   const filtered = customers
     .filter((customer) => includeInactive || customer.is_active)
     .filter((customer) => matchesQuery(customer, q))
+    .filter((customer) => !predicate || predicate(customer))
     .sort((a, b) => a.display_name.localeCompare(b.display_name, 'zh-Hans-CN'));
   const safePage = Math.max(1, page);
   const safePageSize = Math.min(100, Math.max(1, pageSize));
@@ -160,18 +161,6 @@ export function listMockCustomers({
 
 function validate(body: Partial<CustomerWrite>): Record<string, string[]> {
   const errors: Record<string, string[]> = {};
-  if (
-    body.billing_anchor_day !== undefined &&
-    (!Number.isInteger(body.billing_anchor_day) ||
-      body.billing_anchor_day < 1 ||
-      body.billing_anchor_day > 31)
-  )
-    errors.billing_anchor_day = ['INVALID_ANCHOR'];
-  if (
-    body.payment_terms !== undefined &&
-    (typeof body.payment_terms !== 'string' || body.payment_terms.length > 1000)
-  )
-    errors.payment_terms = ['INVALID_TERMS'];
   if ('display_name' in body && !body.display_name?.trim()) {
     errors.display_name = ['Name is required'];
   }
@@ -249,8 +238,6 @@ export const customerHandlers: HttpHandler[] = [
       state: body.state?.trim() || null,
       postal_code: body.postal_code?.trim() || null,
       notes: body.notes?.trim() || null,
-      billing_anchor_day: body.billing_anchor_day ?? 1,
-      payment_terms: body.payment_terms?.trim() ?? '',
       created_at: now,
       updated_at: now,
     });
@@ -298,7 +285,6 @@ export const customerHandlers: HttpHandler[] = [
       ),
       usdot_number: usdot,
       display_name: fields.display_name?.trim() || current.display_name,
-      payment_terms: fields.payment_terms?.trim() ?? current.payment_terms ?? '',
       is_active: is_active ?? current.is_active,
       version: current.version + 1,
       updated_at: new Date().toISOString(),

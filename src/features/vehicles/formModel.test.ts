@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   diffWrite,
   emptyVehicleForm,
+  formToCreate,
   formToWrite,
   vehicleFormSchema,
   vehicleToForm,
@@ -70,6 +71,59 @@ describe('vehicle form rules', () => {
 });
 
 describe('vehicle form to wire', () => {
+  it('omits parking when the amount is blank, even if a start date remains', () => {
+    expect(
+      formToCreate({
+        ...base,
+        usdot_number: '1234567',
+        unit_number: '99',
+        monthly_rate: ' ',
+        parking_starts_on: '2026-10-01',
+      }),
+    ).not.toHaveProperty('parking');
+  });
+
+  it.each(['0', '350.25'])('writes initial parking amount %s in cents', (rate) => {
+    const write = formToCreate({
+      ...base,
+      usdot_number: '1234567',
+      unit_number: '99',
+      monthly_rate: rate,
+      parking_starts_on: '2026-10-01',
+    });
+    expect(write.parking).toEqual({
+      starts_on: '2026-10-01',
+      effective_on: '2026-10-01',
+      ends_on: null,
+      monthly_rate: { amount: rate === '0' ? 0 : 35025, currency: 'USD' },
+      reason: 'Initial monthly parking',
+    });
+  });
+
+  it.each(['-1', '1.234', 'abc', '10000000'])('rejects invalid parking rate %s', (rate) => {
+    expect(
+      errorPaths({
+        usdot_number: '1',
+        unit_number: '99',
+        monthly_rate: rate,
+        parking_starts_on: '2026-10-01',
+      }),
+    ).toEqual(['monthly_rate']);
+  });
+
+  it('requires a real billing start date when setting the amount', () => {
+    for (const date of ['', '2026-02-30']) {
+      expect(
+        errorPaths({
+          usdot_number: '1',
+          unit_number: '99',
+          monthly_rate: '300',
+          parking_starts_on: date,
+        }),
+      ).toEqual(['parking_starts_on']);
+    }
+  });
+
   it('trims, writes the state in capitals, and turns blanks into null', () => {
     const write = formToWrite({
       ...base,

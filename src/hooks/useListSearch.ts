@@ -10,6 +10,7 @@ export function useListSearch() {
   const [searchParams, setSearchParams] = useSearchParams();
   const urlQ = searchParams.get('q') ?? '';
   const includeInactive = searchParams.get('inactive') === '1';
+  const showOverdue = searchParams.get('overdue') === '1';
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
 
   const [searchText, setSearchText] = useState(urlQ);
@@ -59,6 +60,7 @@ export function useListSearch() {
   return {
     urlQ,
     includeInactive,
+    showOverdue,
     page,
     searchText,
     setSearchText,

@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -18,6 +19,7 @@ import { CustomerPicker } from '@/features/vehicles/CustomerPicker';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { isApiError } from '@/lib/api/errors';
 import { todayInTimeZone } from '@/lib/dates';
+import { formatMoney } from '@/lib/money';
 import { paymentsApi, usePaymentMutation } from './api';
 import {
   PAYMENT_METHODS,
@@ -80,10 +82,11 @@ function ReceiptForm({
   onClose: () => void;
   onSaved: (payment: Payment) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const online = useOnlineStatus();
   const mutation = usePaymentMutation();
   const [selected, setSelected] = useState<Customer | null>(customer ?? null);
+  const [review, setReview] = useState<PaymentWrite | null>(null);
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [requestId, setRequestId] = useState<string | undefined>();
   const [uncertain, setUncertain] = useState(false);
@@ -170,15 +173,22 @@ function ReceiptForm({
   };
   const submit = form.handleSubmit(async (values) => {
     if (pending.current || !online) return;
-    const operation = { key: crypto.randomUUID(), body: toPaymentWrite(values) };
-    pending.current = operation;
-    await attempt(operation);
+    setReview(toPaymentWrite(values));
   });
+  const confirmRecord = () => {
+    if (!review || pending.current || !online) return;
+    const operation = { key: crypto.randomUUID(), body: review };
+    pending.current = operation;
+    setReview(null);
+    void attempt(operation);
+  };
   return (
     <>
       <Dialog open fullWidth maxWidth="sm" onClose={close} aria-labelledby="record-payment-title">
-        <DialogTitle id="record-payment-title">{t('payments.record')}</DialogTitle>
-        <form onSubmit={submit} noValidate>
+        <DialogTitle id="record-payment-title">
+          {t(review ? 'payments.reviewTitle' : 'payments.record')}
+        </DialogTitle>
+        <form onSubmit={review ? (event) => event.preventDefault() : submit} noValidate>
           <DialogContent>
             <Stack spacing={2}>
               <Alert severity="info">{t('payments.offlineReceipt')}</Alert>
@@ -193,123 +203,183 @@ function ReceiptForm({
                   )}
                 </Alert>
               )}
-              {customer ? (
-                <Typography>{customer.display_name}</Typography>
+              {review ? (
+                <>
+                  <Alert severity="warning">{t('payments.recordReviewWarning')}</Alert>
+                  <Stack component="dl" spacing={0} sx={{ m: 0 }}>
+                    {[
+                      [
+                        t('payments.customer'),
+                        selected?.display_name ?? customer?.display_name ?? review.customer_id,
+                      ],
+                      [
+                        t('payments.amount'),
+                        formatMoney(review.amount.amount, i18n.resolvedLanguage ?? 'zh-CN'),
+                      ],
+                      [t('payments.date'), review.effective_on],
+                      [t('payments.method'), t(`account.methods.${review.method}`)],
+                      [t('payments.reference'), review.reference ?? t('common.notProvided')],
+                      [t('payments.notes'), review.notes ?? t('common.notProvided')],
+                    ].map(([label, value]) => (
+                      <Box
+                        key={label}
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: 2,
+                          py: 1,
+                          borderBottom: 1,
+                          borderColor: 'divider',
+                        }}
+                      >
+                        <Typography component="dt" variant="body2" color="text.secondary">
+                          {label}
+                        </Typography>
+                        <Typography
+                          component="dd"
+                          variant="body2"
+                          sx={{ m: 0, textAlign: 'right', overflowWrap: 'anywhere' }}
+                        >
+                          {value}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
+                </>
               ) : (
-                <Controller
-                  name="customer_id"
-                  control={form.control}
-                  render={({ field }) => (
-                    <CustomerPicker
-                      label={t('payments.customer')}
-                      required
-                      value={selected}
-                      onChange={(next) => {
-                        setSelected(next);
-                        field.onChange(next?.id ?? '');
-                      }}
-                      includeInactive
-                      disabled={locked}
-                      onBlur={field.onBlur}
-                      inputRef={field.ref}
-                      error={Boolean(errors.customer_id)}
-                      helperText={
-                        errors.customer_id?.message
-                          ? t(errors.customer_id.message)
-                          : t('payments.customerHint')
-                      }
+                <>
+                  {customer ? (
+                    <Typography>{customer.display_name}</Typography>
+                  ) : (
+                    <Controller
+                      name="customer_id"
+                      control={form.control}
+                      render={({ field }) => (
+                        <CustomerPicker
+                          label={t('payments.customer')}
+                          required
+                          value={selected}
+                          onChange={(next) => {
+                            setSelected(next);
+                            field.onChange(next?.id ?? '');
+                          }}
+                          includeInactive
+                          disabled={locked}
+                          onBlur={field.onBlur}
+                          inputRef={field.ref}
+                          error={Boolean(errors.customer_id)}
+                          helperText={
+                            errors.customer_id?.message
+                              ? t(errors.customer_id.message)
+                              : t('payments.customerHint')
+                          }
+                        />
+                      )}
                     />
                   )}
-                />
-              )}
-              <TextField
-                label={t('payments.amount')}
-                required
-                inputMode="decimal"
-                fullWidth
-                {...form.register('amount')}
-                slotProps={{ input: { readOnly: locked }, inputLabel: { shrink: true } }}
-                error={Boolean(errors.amount)}
-                helperText={errors.amount?.message ? t(errors.amount.message) : undefined}
-              />
-              <TextField
-                label={t('payments.date')}
-                required
-                type="date"
-                fullWidth
-                {...form.register('effective_on')}
-                slotProps={{
-                  input: { readOnly: locked },
-                  inputLabel: { shrink: true },
-                  htmlInput: { max: today },
-                }}
-                error={Boolean(errors.effective_on)}
-                helperText={
-                  errors.effective_on?.message ? t(errors.effective_on.message) : undefined
-                }
-              />
-              <Controller
-                name="method"
-                control={form.control}
-                render={({ field }) => (
                   <TextField
-                    {...field}
-                    select
+                    label={t('payments.amount')}
                     required
-                    label={t('payments.method')}
-                    disabled={locked}
-                  >
-                    {PAYMENT_METHODS.map((method) => (
-                      <MenuItem key={method} value={method}>
-                        {t(`account.methods.${method}`)}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                )}
-              />
-              <TextField
-                label={t('payments.reference')}
-                fullWidth
-                {...form.register('reference')}
-                slotProps={{ input: { readOnly: locked }, inputLabel: { shrink: true } }}
-                error={Boolean(errors.reference)}
-                helperText={
-                  errors.reference?.message
-                    ? t(errors.reference.message)
-                    : t('payments.referenceHint')
-                }
-              />
-              <TextField
-                label={t('payments.notes')}
-                fullWidth
-                multiline
-                minRows={2}
-                {...form.register('notes')}
-                slotProps={{ input: { readOnly: locked }, inputLabel: { shrink: true } }}
-                error={Boolean(errors.notes)}
-                helperText={errors.notes?.message ? t(errors.notes.message) : undefined}
-              />
-              <Typography>{t('payments.unallocatedHint')}</Typography>
+                    inputMode="decimal"
+                    fullWidth
+                    {...form.register('amount')}
+                    slotProps={{ input: { readOnly: locked }, inputLabel: { shrink: true } }}
+                    error={Boolean(errors.amount)}
+                    helperText={errors.amount?.message ? t(errors.amount.message) : undefined}
+                  />
+                  <TextField
+                    label={t('payments.date')}
+                    required
+                    type="date"
+                    fullWidth
+                    {...form.register('effective_on')}
+                    slotProps={{
+                      input: { readOnly: locked },
+                      inputLabel: { shrink: true },
+                      htmlInput: { max: today },
+                    }}
+                    error={Boolean(errors.effective_on)}
+                    helperText={
+                      errors.effective_on?.message ? t(errors.effective_on.message) : undefined
+                    }
+                  />
+                  <Controller
+                    name="method"
+                    control={form.control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        select
+                        required
+                        label={t('payments.method')}
+                        disabled={locked}
+                      >
+                        {PAYMENT_METHODS.map((method) => (
+                          <MenuItem key={method} value={method}>
+                            {t(`account.methods.${method}`)}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    )}
+                  />
+                  <TextField
+                    label={t('payments.reference')}
+                    fullWidth
+                    {...form.register('reference')}
+                    slotProps={{ input: { readOnly: locked }, inputLabel: { shrink: true } }}
+                    error={Boolean(errors.reference)}
+                    helperText={
+                      errors.reference?.message
+                        ? t(errors.reference.message)
+                        : t('payments.referenceHint')
+                    }
+                  />
+                  <TextField
+                    label={t('payments.notes')}
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    {...form.register('notes')}
+                    slotProps={{ input: { readOnly: locked }, inputLabel: { shrink: true } }}
+                    error={Boolean(errors.notes)}
+                    helperText={errors.notes?.message ? t(errors.notes.message) : undefined}
+                  />
+                  <Typography>{t('payments.unallocatedHint')}</Typography>
+                </>
+              )}
             </Stack>
           </DialogContent>
           <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
-            <Button onClick={close} disabled={locked}>
-              {t('common.cancel')}
-            </Button>
-            {uncertain ? (
-              <Button
-                variant="contained"
-                disabled={busy || !online}
-                onClick={() => {
-                  if (pending.current) void attempt(pending.current);
-                }}
-              >
-                {t(busy ? 'payments.checking' : 'payments.checkResult')}
-              </Button>
+            {review ? (
+              <>
+                <Button onClick={() => setReview(null)} disabled={locked}>
+                  {t('payments.backToEdit')}
+                </Button>
+                <Button variant="contained" disabled={busy || !online} onClick={confirmRecord}>
+                  {t(busy ? 'common.saving' : 'payments.confirmRecord')}
+                </Button>
+              </>
             ) : (
-              <Button type="submit" variant="contained" disabled={busy || !online}>
-                {t(busy ? 'common.saving' : 'payments.record')}
-              </Button>
+              <>
+                <Button onClick={close} disabled={locked}>
+                  {t('common.cancel')}
+                </Button>
+                {uncertain ? (
+                  <Button
+                    variant="contained"
+                    disabled={busy || !online}
+                    onClick={() => {
+                      if (pending.current) void attempt(pending.current);
+                    }}
+                  >
+                    {t(busy ? 'payments.checking' : 'payments.checkResult')}
+                  </Button>
+                ) : (
+                  <Button type="submit" variant="contained" disabled={busy || !online}>
+                    {t(busy ? 'common.saving' : 'payments.review')}
+                  </Button>
+                )}
+              </>
             )}
           </DialogActions>
         </form>

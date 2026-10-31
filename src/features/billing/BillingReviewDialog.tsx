@@ -78,6 +78,8 @@ export function BillingReviewDialog({
       await Promise.all([
         client.invalidateQueries({ queryKey: ['ledger', customerId] }),
         client.invalidateQueries({ queryKey: ['payments'] }),
+        client.invalidateQueries({ queryKey: ['overview'] }),
+        client.invalidateQueries({ queryKey: ['customers', 'list'] }),
       ]);
       onIssued();
     } catch (failure) {

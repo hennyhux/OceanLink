@@ -4,6 +4,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
+import Chip from '@mui/material/Chip';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
@@ -66,8 +67,7 @@ export function VehiclesPage() {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
   const location = useLocation();
-  // More columns than the customer list, so switch to cards sooner to keep "Edit" in view.
-  const isNarrow = useMediaQuery(theme.breakpoints.down('lg'));
+  const isNarrow = useMediaQuery(theme.breakpoints.down('md'));
   const { urlQ, includeInactive, page, searchText, setSearchText, clearSearch, updateParams } =
     useListSearch();
 
@@ -95,6 +95,64 @@ export function VehiclesPage() {
   // After editing, come back to this same search, filter and page.
   const here = encodeURIComponent(`${location.pathname}${location.search}`);
   const editHref = (id: string) => `/vehicles/${id}/edit?returnTo=${here}`;
+  const searchField = (
+    <TextField
+      label={t('vehicles.searchLabel')}
+      helperText={isNarrow ? undefined : t('vehicles.searchHint')}
+      size={isNarrow ? 'small' : 'medium'}
+      value={searchText}
+      onChange={(event) => setSearchText(event.target.value)}
+      type="search"
+      fullWidth
+      slotProps={{
+        input: {
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon aria-hidden />
+            </InputAdornment>
+          ),
+          endAdornment: searchText ? (
+            <InputAdornment position="end">
+              <IconButton aria-label={t('common.clearSearch')} onClick={clearSearch} edge="end">
+                <ClearIcon />
+              </IconButton>
+            </InputAdornment>
+          ) : null,
+        },
+      }}
+    />
+  );
+  const inactiveFilter = (
+    <FormControlLabel
+      sx={{
+        whiteSpace: { xs: 'normal', sm: 'nowrap' },
+        alignSelf: { sm: 'flex-start' },
+        mt: { sm: 1 },
+        m: 0,
+        gap: 0.25,
+        minHeight: 44,
+        minWidth: 0,
+        width: { xs: '100%', sm: 'auto' },
+        flex: { xs: '0 0 100%', sm: '0 0 auto' },
+        '& .MuiFormControlLabel-label': { fontSize: '0.9375rem', overflowWrap: 'anywhere' },
+      }}
+      control={
+        <Checkbox
+          size="small"
+          sx={{ width: 44, height: 44, p: '13px', flex: '0 0 44px' }}
+          checked={includeInactive}
+          onChange={(event) =>
+            updateParams({ inactive: event.target.checked ? '1' : null, page: null })
+          }
+        />
+      }
+      label={t('vehicles.showInactive')}
+    />
+  );
+  const rateLabel = (vehicle: Vehicle) =>
+    vehicle.parking
+      ? formatMoney(vehicle.parking.monthly_rate.amount, i18n.resolvedLanguage ?? 'zh-CN')
+      : t('parking.notConfigured');
 
   return (
     <>
@@ -102,63 +160,53 @@ export function VehiclesPage() {
       <PageHeader
         title={t('vehicles.title')}
         action={
-          <Button
-            component={RouterLink}
-            to="/vehicles/new"
-            variant="contained"
-            size="large"
-            startIcon={<AddIcon />}
-            sx={{ display: { xs: 'none', lg: 'inline-flex' } }}
-          >
-            {t('vehicles.add')}
-          </Button>
+          isNarrow ? undefined : (
+            <Button
+              component={RouterLink}
+              to="/vehicles/new"
+              variant="contained"
+              size="large"
+              startIcon={<AddIcon />}
+              sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+            >
+              {t('vehicles.add')}
+            </Button>
+          )
         }
       />
 
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
-          <TextField
-            label={t('vehicles.searchLabel')}
-            helperText={t('vehicles.searchHint')}
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-            type="search"
-            fullWidth
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon aria-hidden />
-                  </InputAdornment>
-                ),
-                endAdornment: searchText ? (
-                  <InputAdornment position="end">
-                    <IconButton
-                      aria-label={t('common.clearSearch')}
-                      onClick={clearSearch}
-                      edge="end"
-                    >
-                      <ClearIcon />
-                    </IconButton>
-                  </InputAdornment>
-                ) : null,
-              },
-            }}
-          />
-          <FormControlLabel
-            sx={{ whiteSpace: 'nowrap', alignSelf: { sm: 'flex-start' }, mt: { sm: 1 } }}
-            control={
-              <Checkbox
-                checked={includeInactive}
-                onChange={(event) =>
-                  updateParams({ inactive: event.target.checked ? '1' : null, page: null })
-                }
-              />
-            }
-            label={t('vehicles.showInactive')}
-          />
-        </Stack>
-      </Paper>
+      {isNarrow ? (
+        <Box sx={{ mb: 1 }}>
+          {searchField}
+          <Stack spacing={0.125} sx={{ mt: 0.25 }}>
+            {data && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                role="status"
+                sx={{
+                  minHeight: 20,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  fontSize: '0.8125rem',
+                  textAlign: 'right',
+                }}
+              >
+                {t('common.resultsCount', { count: data.total })}
+              </Typography>
+            )}
+            {inactiveFilter}
+          </Stack>
+        </Box>
+      ) : (
+        <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+            {searchField}
+            {inactiveFilter}
+          </Stack>
+        </Paper>
+      )}
 
       <Box sx={{ height: 4, mb: 1 }}>
         {list.isFetching && !list.isPending && <LinearProgress aria-label={t('app.loading')} />}
@@ -176,7 +224,7 @@ export function VehiclesPage() {
       )}
 
       {isEmpty && (
-        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
+        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 4 }, textAlign: 'center' }}>
           <Typography component="h2" variant="h6" fontWeight={600}>
             {hasFilters ? t('vehicles.noResultsTitle') : t('vehicles.emptyTitle')}
           </Typography>
@@ -199,57 +247,132 @@ export function VehiclesPage() {
 
       {data && data.items.length > 0 && (
         <>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }} role="status">
-            {t('common.resultsCount', { count: data.total })}
-          </Typography>
+          {!isNarrow && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }} role="status">
+              {t('common.resultsCount', { count: data.total })}
+            </Typography>
+          )}
 
           {isNarrow ? (
-            <Stack spacing={1.5} component="ul" sx={{ listStyle: 'none', p: 0, m: 0, pb: 10 }}>
+            <Stack
+              spacing={1}
+              component="ul"
+              sx={{
+                listStyle: 'none',
+                p: 0,
+                m: 0,
+                pb: 'calc(88px + env(safe-area-inset-bottom))',
+              }}
+            >
               {data.items.map((vehicle) => (
-                <Paper key={vehicle.id} component="li" variant="outlined" sx={{ p: 2 }}>
+                <Paper
+                  key={vehicle.id}
+                  component="li"
+                  variant="outlined"
+                  sx={{
+                    p: 1.25,
+                    position: 'relative',
+                    cursor: 'pointer',
+                    transition: 'background-color 120ms ease, border-color 120ms ease',
+                    '&:hover': { bgcolor: 'action.hover', borderColor: 'primary.main' },
+                  }}
+                >
+                  <Link
+                    component={RouterLink}
+                    to={editHref(vehicle.id)}
+                    aria-label={vehicleTitle(vehicle, unitLabel)}
+                    sx={{
+                      position: 'absolute',
+                      inset: 0,
+                      zIndex: 0,
+                      display: 'block',
+                      color: 'transparent',
+                      fontSize: 0,
+                      textDecoration: 'none',
+                      borderRadius: 'inherit',
+                      '&:focus-visible': {
+                        outline: '3px solid',
+                        outlineColor: 'primary.main',
+                        outlineOffset: 2,
+                      },
+                    }}
+                  />
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
-                    <Link
-                      component={RouterLink}
-                      to={editHref(vehicle.id)}
+                    <Typography
+                      component="span"
                       variant="subtitle1"
                       fontWeight={600}
-                      underline="hover"
+                      sx={{
+                        flex: '1 1 auto',
+                        minWidth: 0,
+                        fontSize: '0.9375rem',
+                        lineHeight: 1.25,
+                        overflowWrap: 'anywhere',
+                      }}
                     >
                       {vehicleTitle(vehicle, unitLabel)}
-                    </Link>
-                    <ActiveStatusChip isActive={vehicle.is_active} />
+                    </Typography>
+                    <Box sx={{ flexShrink: 0 }}>
+                      <ActiveStatusChip isActive={vehicle.is_active} />
+                    </Box>
                   </Box>
-                  <Typography variant="body2" color="text.secondary">
-                    {t(`vehicles.type.${vehicle.vehicle_type}`)}
-                  </Typography>
-                  <VehicleIdentifiers vehicle={vehicle} />
-                  <Typography>
-                    {t('parking.currentRate')}:{' '}
-                    {vehicle.parking
-                      ? formatMoney(
-                          vehicle.parking.monthly_rate.amount,
-                          i18n.resolvedLanguage ?? 'zh-CN',
-                        )
-                      : t('parking.notConfigured')}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.5 }}>
-                    <Link component={RouterLink} to={`/customers/${vehicle.customer_id}`}>
+                  <Box sx={{ mt: 0.5, minWidth: 0, overflowWrap: 'anywhere' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {t(`vehicles.type.${vehicle.vehicle_type}`)}
+                    </Typography>
+                    <VehicleIdentifiers vehicle={vehicle} />
+                    <Link
+                      component={RouterLink}
+                      to={`/customers/${vehicle.customer_id}`}
+                      variant="body2"
+                      underline="hover"
+                      sx={{ position: 'relative', zIndex: 1 }}
+                    >
                       {vehicle.customer_name}
                     </Link>
-                  </Typography>
+                  </Box>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    flexWrap="wrap"
+                    gap={0.75}
+                    sx={{ mt: 0.75, pt: 0.75, borderTop: 1, borderColor: 'divider' }}
+                  >
+                    <Typography variant="body2" color="text.secondary">
+                      {t('parking.currentRate')}:
+                    </Typography>
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={rateLabel(vehicle)}
+                      sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
+                    />
+                  </Stack>
                 </Paper>
               ))}
             </Stack>
           ) : (
             <TableContainer component={Paper} variant="outlined">
               <Table aria-label={t('vehicles.title')}>
-                <TableHead>
+                <TableHead
+                  sx={{
+                    '& .MuiTableCell-root': {
+                      bgcolor: 'primary.main',
+                      color: 'primary.contrastText',
+                      fontWeight: 700,
+                      borderBottomColor: 'primary.dark',
+                    },
+                  }}
+                >
                   <TableRow>
                     <TableCell sx={{ minWidth: 160 }}>{t('vehicles.columns.vehicle')}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       {t('vehicles.columns.identifiers')}
                     </TableCell>
                     <TableCell sx={{ minWidth: 160 }}>{t('vehicles.columns.customer')}</TableCell>
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
+                      {t('parking.currentRate')}
+                    </TableCell>
                     <TableCell>{t('vehicles.columns.status')}</TableCell>
                     <TableCell align="right">{t('vehicles.columns.actions')}</TableCell>
                   </TableRow>
@@ -272,15 +395,6 @@ export function VehiclesPage() {
                       </TableCell>
                       <TableCell sx={{ whiteSpace: 'nowrap' }}>
                         <VehicleIdentifiers vehicle={vehicle} />
-                        <Typography>
-                          {t('parking.currentRate')}:{' '}
-                          {vehicle.parking
-                            ? formatMoney(
-                                vehicle.parking.monthly_rate.amount,
-                                i18n.resolvedLanguage ?? 'zh-CN',
-                              )
-                            : t('parking.notConfigured')}
-                        </Typography>
                       </TableCell>
                       <TableCell>
                         <Link
@@ -290,6 +404,14 @@ export function VehiclesPage() {
                         >
                           {vehicle.customer_name}
                         </Link>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={rateLabel(vehicle)}
+                          sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
+                        />
                       </TableCell>
                       <TableCell>
                         <ActiveStatusChip isActive={vehicle.is_active} />
@@ -338,9 +460,7 @@ export function VehiclesPage() {
           )}
         </>
       )}
-      {isNarrow && (
-        <MobilePrimaryAction label={t('vehicles.add')} to="/vehicles/new" hideAt="lg" />
-      )}
+      {isNarrow && <MobilePrimaryAction label={t('vehicles.add')} to="/vehicles/new" hideAt="md" />}
     </>
   );
 }

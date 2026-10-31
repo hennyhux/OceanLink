@@ -1,8 +1,8 @@
 **OceanLink Frontend Requirements**
 
-**Version:** 2.0  
+**Version:** 2.0
 
-**Current simplification:** Monthly parking belongs directly to each vehicle. There is no separate parking-contract entity, approval screen or shared contract price. Customer billing defaults apply to new vehicle parking setups; existing setup snapshots and issued invoices do not change when defaults are edited.
+**Current simplification:** Monthly parking belongs directly to each vehicle. There is no separate parking-contract entity, approval screen, shared contract price, capacity category, or customer billing-day/payment-term default. Monthly billing periods are anchored to the vehicle's service start date.
 **Primary users:** The owners and staff of the family’s truck parking lot.  
 **Requirement statuses:** `Planned` | `In Progress` | `Done` | `Deferred`
 
@@ -50,8 +50,7 @@ These defaults make implementation concrete. Actual customer agreements and exis
 
 | Area                               | Default                                                                    |
 | ---------------------------------- | -------------------------------------------------------------------------- |
-| Parking sold to monthly customers  | A space in a capacity category, without a guaranteed numbered bay          |
-| Capacity consumption               | One parked unit consumes one space                                         |
+| Parking sold to monthly customers  | A vehicle-owned monthly service; no capacity commitment or size category   |
 | Tractor and attached trailer       | One unit when parked together                                              |
 | Detached trailer parked separately | A separate unit and vehicle record                                         |
 | Monthly billing                    | Recurring monthly periods with a configurable billing anchor day           |
@@ -61,7 +60,7 @@ These defaults make implementation concrete. Actual customer agreements and exis
 | Automatic late fees                | Disabled; staff may add a documented charge                                |
 | Payment allocation                 | Staff reviews allocations; the UI may suggest oldest unpaid invoices first |
 | Physical spot selection by drivers | Deferred; reservations select a capacity category                          |
-| Complex pricing rules              | Deferred; use vehicle-specific monthly rates and flat hourly rates       |
+| Complex pricing rules              | Deferred; use vehicle-specific monthly rates and flat hourly rates         |
 
 Changing a default must not silently change an issued invoice or an existing agreed price.
 
@@ -83,15 +82,15 @@ A trucking company can be a customer with multiple vehicles and invoices without
 
 | Action                                                                        | Operator | Admin |
 | ----------------------------------------------------------------------------- | -------: | ----: |
-| View customers, vehicles, monthly rates, invoices, balances, and reports         |      Yes |   Yes |
+| View customers, vehicles, monthly rates, invoices, balances, and reports      |      Yes |   Yes |
 | Create and edit routine customer and vehicle information                      |      Yes |   Yes |
-| Set up vehicle monthly parking and prepare invoices                                        |      Yes |   Yes |
-| Save a vehicle parking setup within available capacity                               |      Yes |   Yes |
+| Set up vehicle monthly parking and prepare invoices                           |      Yes |   Yes |
+| Save a vehicle monthly parking setup without a capacity limit                 |      Yes |   Yes |
 | Issue invoices                                                                |      Yes |   Yes |
 | Record an offline payment and allocate it                                     |      Yes |   Yes |
 | Check vehicles in and out, starting in MVP 2                                  |      Yes |   Yes |
 | Void an issued invoice, issue a credit, reverse a payment, or record a refund |       No |   Yes |
-| Schedule future changes to existing vehicle monthly rates                           |       No |   Yes |
+| Schedule future changes to existing vehicle monthly rates                     |       No |   Yes |
 | Change lot capacity or pricing configuration                                  |       No |   Yes |
 | Manage staff accounts and roles                                               |       No |   Yes |
 | Commit a migration or opening-balance import                                  |       No |   Yes |
@@ -131,25 +130,25 @@ Accessibility, authorization, error handling, auditability, and appropriate auto
 
 **4.1 Required workflows**
 
-| ID    | Requirement                                                                          | Role                       | Status  |
-| ----- | ------------------------------------------------------------------------------------ | -------------------------- | ------- |
-| M1-01 | Sign in, sign out, change password, and recover staff access                         | Staff                      | Planned |
-| M1-02 | Add, edit, search (including by USDOT number), and deactivate customers              | Staff                      | Planned |
-| M1-03 | Add, edit, search, and archive vehicle records, each linked by plate or USDOT number | Staff                      | Planned |
-| M1-04 | Associate multiple vehicles with one customer                                        | Staff                      | Planned |
-| M1-05 | Set per-vehicle monthly rates, category and service dates; preserve effective-dated rate history | Staff, with admin controls | Planned |
-| M1-06 | Preview recurring charges and issue monthly invoices                                 | Staff                      | Planned |
-| M1-07 | Download and print invoices and customer statements                                  | Staff                      | Planned |
-| M1-08 | Record cash, check, bank transfer, and externally collected payments                 | Staff                      | Planned |
-| M1-09 | Allocate partial or full payments to invoices                                        | Staff                      | Planned |
-| M1-10 | Show outstanding balances, unapplied credit, and overdue invoices                    | Staff                      | Planned |
-| M1-11 | Record credits, payment corrections, and offline refunds                             | Admin                      | Planned |
-| M1-12 | Show customer, monthly parking, billing, and collections summaries                         | Staff                      | Planned |
-| M1-13 | Import existing customers, vehicles, parking rates and opening balances                | Admin                      | Planned |
-| M1-14 | Export business records to CSV                                                       | Staff                      | Planned |
-| M1-15 | Manage staff accounts, roles, and active status                                      | Admin                      | Planned |
-| M1-16 | Switch the interface between English and Simplified Chinese                          | Staff                      | Planned |
-| M1-17 | Record audit events for financial and access changes                                 | Backend dependency         | Planned |
+| ID    | Requirement                                                                                      | Role                       | Status  |
+| ----- | ------------------------------------------------------------------------------------------------ | -------------------------- | ------- |
+| M1-01 | Sign in, sign out, change password, and recover staff access                                     | Staff                      | Planned |
+| M1-02 | Add, edit, search (including by USDOT number), and deactivate customers                          | Staff                      | Planned |
+| M1-03 | Add, edit, search, and archive vehicle records, each linked by plate or USDOT number             | Staff                      | Planned |
+| M1-04 | Associate multiple vehicles with one customer                                                    | Staff                      | Planned |
+| M1-05 | Set per-vehicle monthly rates and service dates; preserve effective-dated rate history          | Staff, with admin controls | Planned |
+| M1-06 | Preview recurring charges and issue monthly invoices                                             | Staff                      | Planned |
+| M1-07 | Download and print invoices and customer statements                                              | Staff                      | Planned |
+| M1-08 | Record cash, check, bank transfer, and externally collected payments                             | Staff                      | Planned |
+| M1-09 | Allocate partial or full payments to invoices                                                    | Staff                      | Planned |
+| M1-10 | Show outstanding balances, unapplied credit, and overdue invoices                                | Staff                      | Planned |
+| M1-11 | Record credits, payment corrections, and offline refunds                                         | Admin                      | Planned |
+| M1-12 | Show customer, monthly parking, billing, and collections summaries                               | Staff                      | Planned |
+| M1-13 | Import existing customers, vehicles, parking rates and opening balances                          | Admin                      | Planned |
+| M1-14 | Export business records to CSV                                                                   | Staff                      | Planned |
+| M1-15 | Manage staff accounts, roles, and active status                                                  | Admin                      | Planned |
+| M1-16 | Switch the interface between English and Simplified Chinese                                      | Staff                      | Planned |
+| M1-17 | Record audit events for financial and access changes                                             | Backend dependency         | Planned |
 
 **4.2 Main navigation**
 
@@ -167,7 +166,7 @@ The common workflow should be easy to complete:
 
 1. Find or add the customer.
 2. Add their vehicle.
-3. Set the vehicle's monthly rate, category and service dates.
+3. Set the vehicle's monthly rate and service dates.
 4. Preview and issue the invoice.
 5. Print or download the invoice.
 6. Record payment.
@@ -184,7 +183,7 @@ MVP 1 overview shows six dashboard KPIs:
 - Total registered customers, including inactive customers.
 - Total registered trucks, counting trucks and combinations, including inactive vehicles; standalone trailers are excluded.
 
-Detailed collections, refunds, net cash, parking capacity commitments, and invoices awaiting review or issuance belong in reports and billing workflows, not the six-card overview.
+Detailed collections, refunds, net cash, physical occupancy, and invoices awaiting review or issuance belong in reports and billing workflows, not the six-card overview.
 
 MVP 1 must not label monthly-parking vehicles as physically present.
 
@@ -200,6 +199,7 @@ Physical occupancy and live check-in information are introduced in MVP 2.
 - Invoice and statement PDFs must render Chinese characters correctly.
 - Financial amounts use USD formatting consistently.
 - Common actions must work on a laptop and tablet without horizontal page scrolling.
+- On phones, the customer list uses a compact header with a visible Add customer button, one unframed search field, and a result-count/inactive-filter row. Each customer card separates identity/status, contact details, and a plain balance/truck-count summary. Names and translated content wrap naturally; balance values stay neutral unless an overdue amount is explicitly provided.
 - On mobile layouts, tabs with a primary create or record action use the same circular floating action button at the bottom right; desktop layouts keep the labeled action in the page header. Do not show a floating action where the tab has no primary create or record action, and keep scroll content clear of the button.
 
 **4.5 Out of scope**
@@ -237,9 +237,7 @@ A walk-in must have a customer record identifying the payer. A customer login is
 
 **5.2 Monthly customers**
 
-Checking in a vehicle with effective monthly parking uses the capacity already committed by that vehicle's parking setup.
-
-It must not consume a second unit of contractual capacity.
+Monthly parking records do not reserve or consume physical capacity. Check-in and spot assignment use physical occupancy rules only.
 
 Checking out the vehicle removes its physical presence. It does not release its monthly parking entitlement.
 
@@ -333,11 +331,11 @@ Ownership transfers must preserve historical customer relationships.
 
 The customer is the payer; each vehicle has its own optional monthly parking setup. No separate contract or approval entity is required.
 
-A parking setup stores the capacity category, billing start date, optional exclusive service end date, monthly USD rate, copied billing day and payment terms, and effective-dated rate history. Each vehicle consumes one unit of compatible capacity for its full service interval, even while absent.
+A parking setup stores the billing start date, optional exclusive service end date, monthly USD rate, and effective-dated rate history. Monthly parking does not reserve physical capacity and does not distinguish vehicle types by size category. The first billing period is one full month from the start date; later periods recur on that day. If a month lacks the start day, use its final day and restore the original day when possible.
 
-Customer defaults are billing day 1 and payment due at the start of the service period unless staff records different terms. Defaults are copied when parking is first saved; later customer edits do not change an existing setup.
+Invoice due dates are the service-period start date, or the issue date if issued later. There are no customer or parking-level billing-day or payment-term overrides.
 
-Saving the setup checks vehicle/customer active status, category compatibility and interval capacity atomically. Existing service starts and category cannot be rewritten through ordinary edits. Admin-only rate changes append history with a future effective date and reason; they do not overwrite old rates or issued invoices.
+Saving the setup checks vehicle/customer active status. Existing service starts cannot be rewritten through ordinary edits. Admin-only rate changes append history with a future effective date and reason; they do not overwrite old rates or issued invoices.
 
 Business dates have an inclusive start and exclusive end. Service through October 31 ends on November 1. Checking out a vehicle does not end monthly service. An admin reviews changes to an existing service end date and handles credits/refunds separately. Archive only after monthly service has ended; preserve its rate history.
 
@@ -406,6 +404,8 @@ Every invoice identifies the paying customer.
 
 Invoice lines may originate from a vehicle's monthly parking, walk-in, reservation, manual charge, or opening balance. A reservation is not required.
 
+Staff may add a one-time manual debit to a customer without linking it to a vehicle. The debit requires a description, positive USD amount, and due date. It is created as a draft and must be reviewed and explicitly issued before it contributes to receivables. Issuance creates an invoice transaction; it does not record a payment or move money. The issued description, amount, due date, actor, and issue date remain in transaction history. Draft creation and issuance are idempotent; corrections follow invoice void/credit-note permissions.
+
 **7.6 Payments, credits, and balances**
 
 MVP 1 records money received outside OceanLink. It does not charge a card or move funds.
@@ -445,24 +445,21 @@ Capacity is managed in categories, such as standard, long, and oversize. The dem
 
 The initial setup may use one category if that matches the actual lot. Adding categories must reflect real space and vehicle constraints.
 
-There is no automatic substitution between categories in the initial releases.
+There is no automatic substitution between physical spot categories in the initial releases.
 
-Physical spot records exist from initial setup so capacity has one authoritative source. The full spot-management interface arrives in MVP 2.
+Physical spot records exist from initial setup so physical occupancy has one authoritative source. Monthly vehicle parking is not a physical capacity commitment. The full spot-management interface arrives in MVP 2.
 
 Separate these concepts:
 
-| Concept               | Meaning                                                                 |
-| --------------------- | ----------------------------------------------------------------------- |
-| Physical capacity     | Non-retired physical spots                                              |
-| Operational capacity  | Spots currently enabled for use                                         |
-| Physical occupancy    | Spots containing an active parking session                              |
-| Monthly committed capacity | Capacity committed to saved vehicle monthly parking setups                       |
-| Temporary commitments | Capacity held by walk-ins, reservation holds, or confirmed reservations |
-| Bookable capacity     | Capacity remaining throughout a requested interval                      |
+| Concept                    | Meaning                                                                 |
+| -------------------------- | ----------------------------------------------------------------------- |
+| Physical capacity          | Non-retired physical spots                                              |
+| Operational capacity       | Spots currently enabled for use                                         |
+| Physical occupancy         | Spots containing an active parking session                              |
+| Temporary commitments      | Capacity held by walk-ins, reservation holds, or confirmed reservations |
+| Bookable capacity          | Capacity remaining throughout a requested interval                      |
 
-A vehicle monthly parking setup consumes one unit in its category throughout its effective term, even when that vehicle is absent.
-
-A monthly customer’s active parking session references that existing commitment. It must not be counted twice.
+A monthly parking setup does not consume physical capacity. Check-in and spot assignment are governed by physical occupancy rules, not the vehicle's monthly billing record.
 
 A walk-in or reservation creates a temporary commitment.
 
@@ -635,18 +632,17 @@ Modification and cancellation must use version checks to prevent concurrent acti
 
 Use precise labels instead of a generic “revenue” metric.
 
-| Metric                         | Definition                                                            |
-| ------------------------------ | --------------------------------------------------------------------- |
-| Gross collections              | Valid received payments with effective dates in the selected interval |
-| Refunds                        | Successful refunds with effective dates in the selected interval      |
-| Net cash collected             | Gross collections minus refunds                                       |
-| Outstanding receivables        | Remaining balances on issued, non-void invoices                       |
-| Overdue receivables            | Outstanding balances whose due date is before the selected as-of date |
-| Customer credit                | Unapplied valid funds and opening-credit adjustments                  |
-| Vehicles with monthly parking | Vehicle service intervals covering the lot's current local date             |
-| Physical occupancy             | Vehicles with active parking sessions at the reported instant         |
-| Monthly committed capacity     | Capacity committed by effective vehicle monthly parking                    |
-| Bookable capacity              | Minimum remaining compatible capacity across the requested interval   |
+| Metric                        | Definition                                                            |
+| ----------------------------- | --------------------------------------------------------------------- |
+| Gross collections             | Valid received payments with effective dates in the selected interval |
+| Refunds                       | Successful refunds with effective dates in the selected interval      |
+| Net cash collected            | Gross collections minus refunds                                       |
+| Outstanding receivables       | Remaining balances on issued, non-void invoices                       |
+| Overdue receivables           | Outstanding balances whose due date is before the selected as-of date |
+| Customer credit               | Unapplied valid funds and opening-credit adjustments                  |
+| Vehicles with monthly parking | Vehicle service intervals covering the lot's current local date       |
+| Physical occupancy            | Vehicles with active parking sessions at the reported instant         |
+| Bookable capacity             | Minimum remaining compatible capacity across the requested interval   |
 
 Credit notes do not count as cash refunds.
 
@@ -667,28 +663,28 @@ Overdue aging buckets are:
 
 All mutable resources include a `version` used for concurrency checks.
 
-| Model             | Required information                                                                                                                                                                         |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| User              | ID, email, name, role, active status, preferred language, password-change requirement                                                                                                        |
-| Customer          | ID, individual/business type, display name, optional USDOT number, contact details, billing address, active status                                                                           |
-| Vehicle           | ID, customer ID, unit number, vehicle type, plate and jurisdiction (optional), USDOT number (optional), capacity category, active status. At least one of plate or USDOT number is required. |
-| Lot               | ID, name, address, time zone, currency, derived capacity summaries                                                                                                                           |
-| CapacityPool      | ID, lot ID, label/category, compatibility rules, derived capacity                                                                                                                            |
-| Spot              | ID, pool ID, label, condition; occupancy is a computed view                                                                                                                                  |
-| Vehicle parking fields | Vehicle-owned category, service dates, monthly rate, copied billing day/terms and effective-dated rate history. No separate contract entity. |
-| Invoice           | ID, invoice number, customer snapshot, document status, issue date, due date, lines, totals, derived payment state and balance                                                               |
-| InvoiceLine       | Description, amount, vehicle snapshot when applicable, service period, source type and source ID                                                                                             |
-| Payment           | ID, customer, amount, effective date, method, reference, status, recorded-by information                                                                                                     |
-| PaymentAllocation | Payment ID, invoice ID, amount, allocation and reversal history                                                                                                                              |
-| CreditNote        | ID, invoice ID, amount/lines, reason, issue date, actor                                                                                                                                      |
-| Refund            | ID, original payment, amount, method, processing status, reason                                                                                                                              |
-| LedgerEntry       | ID, customer, event type, effective date, amount, source reference, actor                                                                                                                    |
-| ParkingSession    | ID, customer, vehicle, spot, commitment reference, check-in, expected departure, checkout, pricing snapshot                                                                                  |
-| Quote             | ID, requested service, interval, category, total, breakdown, pricing version, expiration                                                                                                     |
-| Reservation       | ID, customer, vehicle, pool, interval, state, accepted pricing, hold expiration, version                                                                                                     |
-| PaymentAttempt    | ID, reservation or modification reference, provider reference, amount, state                                                                                                                 |
-| Notification      | ID, recipient, type, related resource, message key/data, read state, creation time                                                                                                           |
-| AuditEvent        | Actor, action, resource, relevant before/after values, reason, timestamp, request ID                                                                                                         |
+| Model                  | Required information                                                                                                                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| User                   | ID, email, name, role, active status, preferred language, password-change requirement                                                                                                        |
+| Customer               | ID, individual/business type, display name, optional USDOT number, contact details, billing address, active status                                                                           |
+| Vehicle                | ID, customer ID, unit number, vehicle type, plate and jurisdiction (optional), USDOT number (optional), active status. At least one of plate or USDOT number is required. |
+| Lot                    | ID, name, address, time zone, currency, derived capacity summaries                                                                                                                           |
+| CapacityPool           | ID, lot ID, label/category, compatibility rules, derived capacity                                                                                                                            |
+| Spot                   | ID, pool ID, label, condition; occupancy is a computed view                                                                                                                                  |
+| Vehicle parking fields | Vehicle-owned service dates, monthly rate and effective-dated rate history. No billing defaults, capacity category, or separate contract entity.                                         |
+| Invoice                | ID, invoice number, customer snapshot, document status, issue date, due date, lines, totals, derived payment state and balance                                                               |
+| InvoiceLine            | Description, amount, vehicle snapshot when applicable, service period, source type and source ID                                                                                             |
+| Payment                | ID, customer, amount, effective date, method, reference, status, recorded-by information                                                                                                     |
+| PaymentAllocation      | Payment ID, invoice ID, amount, allocation and reversal history                                                                                                                              |
+| CreditNote             | ID, invoice ID, amount/lines, reason, issue date, actor                                                                                                                                      |
+| Refund                 | ID, original payment, amount, method, processing status, reason                                                                                                                              |
+| LedgerEntry            | ID, customer, event type, effective date, amount, source reference, actor                                                                                                                    |
+| ParkingSession         | ID, customer, vehicle, spot, commitment reference, check-in, expected departure, checkout, pricing snapshot                                                                                  |
+| Quote                  | ID, requested service, interval, category, total, breakdown, pricing version, expiration                                                                                                     |
+| Reservation            | ID, customer, vehicle, pool, interval, state, accepted pricing, hold expiration, version                                                                                                     |
+| PaymentAttempt         | ID, reservation or modification reference, provider reference, amount, state                                                                                                                 |
+| Notification           | ID, recipient, type, related resource, message key/data, read state, creation time                                                                                                           |
+| AuditEvent             | Actor, action, resource, relevant before/after values, reason, timestamp, request ID                                                                                                         |
 
 Financial records are not deleted through ordinary CRUD endpoints.
 
@@ -739,18 +735,17 @@ Admin-created temporary credentials require a password change before access to b
 
 **11.3 Customers, vehicles, and monthly parking**
 
-| Method      | Path                            | Access      | Purpose                                        |
-| ----------- | ------------------------------- | ----------- | ---------------------------------------------- |
-| GET         | `/lots/current`                 | Staff       | Load the configured lot                        |
-| PATCH       | `/lots/{id}`                    | Admin       | Edit permitted lot details                     |
-| GET / POST  | `/customers`                    | Staff       | Search customers or create one                 |
-| GET / PATCH | `/customers/{id}`               | Staff       | View or edit allowed customer fields           |
-| GET         | `/customers/{id}/ledger`        | Staff       | Read account history and balances              |
-| GET         | `/customers/{id}/statement.pdf` | Staff       | Download account statement                     |
-| GET / POST  | `/vehicles`                     | Staff       | Search or create vehicles                      |
-| GET / PATCH | `/vehicles/{id}`                | Staff       | View or edit allowed vehicle fields            |
-| GET | `/lots/current/capacity-pools` | Staff | Read configured compatible capacity categories |
-| POST | `/vehicles/{id}/parking` | Staff initially; Admin for rate/end changes | Save monthly parking or append a prospective rate change with `If-Match`; return the updated vehicle |
+| Method      | Path                            | Access                                      | Purpose                                                                                              |
+| ----------- | ------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| GET         | `/lots/current`                 | Staff                                       | Load the configured lot                                                                              |
+| PATCH       | `/lots/{id}`                    | Admin                                       | Edit permitted lot details                                                                           |
+| GET / POST  | `/customers`                    | Staff                                       | Search customers or create one                                                                       |
+| GET / PATCH | `/customers/{id}`               | Staff                                       | View or edit allowed customer fields                                                                 |
+| GET         | `/customers/{id}/ledger`        | Staff                                       | Read account history and balances                                                                    |
+| GET         | `/customers/{id}/statement.pdf` | Staff                                       | Download account statement                                                                           |
+| GET / POST  | `/vehicles`                     | Staff                                       | Search or create vehicles                                                                            |
+| GET / PATCH | `/vehicles/{id}`                | Staff                                       | View or edit allowed vehicle fields                                                                  |
+| POST        | `/vehicles/{id}/parking`        | Staff initially; Admin for rate/end changes | Save monthly parking or append a prospective rate change with `If-Match`; return the updated vehicle |
 
 Archiving is implemented through explicit active-status fields and server-side preconditions.
 
@@ -774,6 +769,8 @@ Archiving a customer does not remove their balance or prevent staff from collect
 | POST        | `/payments/{id}/allocate`     | Staff                 | Apply a reviewed allocation plan                                 |
 | POST        | `/payments/{id}/reverse`      | Admin                 | Correct an erroneous receipt                                     |
 | POST        | `/payments/{id}/refunds`      | Admin                 | Record an offline refund or initiate a supported provider refund |
+
+`GET /invoices` supports customer, source type, pagination, and transaction-date filters. The Customer Detail transaction history includes received/reversed payments and issued manual debit invoices; drafts are not shown.
 
 Billing proposals capture the vehicle parking and rate versions used to calculate their charges.
 
@@ -881,6 +878,8 @@ An `Idempotency-Key` is required for:
 
 The client creates one key per intended operation and reuses it for retries of that operation.
 
+Creating a one-time manual invoice draft and issuing that draft each use a distinct idempotency key. The client reuses the corresponding key when reconciling an uncertain result.
+
 The backend associates the key with the actor, operation, and request content.
 
 Reusing a key with different content returns a conflict.
@@ -899,7 +898,7 @@ Application errors contain:
 
 Example codes:
 
-`CAPACITY_UNAVAILABLE`  
+`CAPACITY_UNAVAILABLE` (physical spot, walk-in, or reservation capacity only; not monthly parking)
 `QUOTE_EXPIRED`  
 `VEHICLE_PERIOD_ALREADY_BILLED`
 `INVOICE_NOT_EDITABLE`  
@@ -1074,7 +1073,7 @@ Migration is part of MVP 1.
 
 - Customers and contact details.
 - Vehicles and customer relationships. Each vehicle needs a plate or a USDOT number; records with neither fail validation.
-- Active vehicle monthly parking, rate history and customer billing defaults.
+- Active vehicle monthly parking and rate history.
 - Current rates and billing schedules.
 - Unpaid invoices or approved opening receivables.
 - Unapplied customer credits.
@@ -1205,7 +1204,7 @@ A customer has two monthly charges of $200 and $250. The issued invoice totals $
 
 **17.2 MVP 2 is complete when**
 
-- A monthly customer can check in without consuming contractual capacity twice.
+- A monthly vehicle can be checked in without its monthly parking record reserving physical capacity.
 - Checkout removes physical presence but preserves monthly entitlement.
 - A walk-in can be assigned compatible capacity, checked out, invoiced, and paid through the offline payment workflow.
 - Duplicate check-in or checkout retries do not create duplicate sessions or charges.

@@ -23,7 +23,6 @@ async function prepare() {
     });
     vehicles.push(
       await vehiclesApi.saveParking(vehicle.id, vehicle.version, {
-        pool_id: 'mock-standard',
         starts_on: start,
         ends_on: null,
         effective_on: start,
@@ -132,5 +131,30 @@ describe('monthly parking billing', () => {
     ]);
     expect(outcomes.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     expect((await ledger()).net_balance.amount).toBe(45000);
+  });
+
+  it('keeps a custom debit draft off the ledger until issue and safely replays retries', async () => {
+    await authApi.login({ email: 'admin@example.com', password: 'admin-password' });
+    const before = await ledger();
+    const body = {
+      customer_id: customer,
+      due_on: today,
+      description: 'Gate repair',
+      amount: { amount: 5500, currency: 'USD' as const },
+    };
+    const draftKey = crypto.randomUUID();
+    const draft = await billingApi.createManualDebit(body, draftKey);
+
+    expect(draft).toMatchObject({ status: 'draft', invoice_number: null });
+    expect((await billingApi.createManualDebit(body, draftKey)).id).toBe(draft.id);
+    expect(await ledger()).toMatchObject({ outstanding: before.outstanding });
+
+    const issueKey = crypto.randomUUID();
+    const issued = await billingApi.issueManualDebit(draft.id, issueKey);
+    expect(issued).toMatchObject({ status: 'issued', total: body.amount });
+    expect((await billingApi.issueManualDebit(draft.id, issueKey)).invoice_number).toBe(
+      issued.invoice_number,
+    );
+    expect((await ledger()).outstanding.amount).toBe(before.outstanding.amount + 5500);
   });
 });

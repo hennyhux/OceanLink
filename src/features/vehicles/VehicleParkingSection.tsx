@@ -1,17 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import MenuItem from '@mui/material/MenuItem';
+import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useEffect, useState, type ChangeEvent } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/features/auth/useAuth';
-import type { Customer } from '@/features/customers/types';
 import { isApiError } from '@/lib/api/errors';
 import { formatMoney } from '@/lib/money';
 import { vehiclesApi, vehicleKeys } from './api';
@@ -20,11 +19,9 @@ import type { Vehicle } from './types';
 
 export function VehicleParkingSection({
   vehicle,
-  customer,
   onDirtyChange,
 }: {
   vehicle: Vehicle;
-  customer?: Customer;
   onDirtyChange: (dirty: boolean) => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -36,7 +33,6 @@ export function VehicleParkingSection({
   const [confirm, setConfirm] = useState<ParkingFormValues | null>(null);
   const parking = baseline.parking;
   const defaults = (record: Vehicle): ParkingFormValues => ({
-    pool_id: record.parking?.pool_id ?? '',
     starts_on: record.parking?.starts_on ?? '',
     ends_on: record.parking?.ends_on ?? '',
     rate: record.parking
@@ -52,7 +48,6 @@ export function VehicleParkingSection({
     resolver: zodResolver(parkingSchema),
     defaultValues: defaults(baseline),
   });
-  const pools = useQuery({ queryKey: ['capacity-pools'], queryFn: vehiclesApi.pools });
   const save = useMutation({
     mutationFn: (values: ParkingFormValues) =>
       vehiclesApi.saveParking(vehicle.id, baseline.version, parkingToWrite(values)),
@@ -75,18 +70,17 @@ export function VehicleParkingSection({
       client.setQueryData(vehicleKeys.detail(updated.id), updated);
       await client.invalidateQueries({ queryKey: vehicleKeys.lists() });
       await client.invalidateQueries({ queryKey: ['ledger'] });
+      await client.invalidateQueries({ queryKey: ['overview'] });
     } catch (error) {
       setConfirm(null);
       setErrorKey(
         isApiError(error) && error.status === 412
           ? 'parking.stale'
-          : isApiError(error) && error.code === 'CAPACITY_UNAVAILABLE'
-            ? 'parking.noCapacity'
-            : isApiError(error) && error.code === 'INVALID_EFFECTIVE_DATE'
-              ? 'parking.invalidFuture'
-              : isApiError(error) && error.status === 403
-                ? 'parking.adminOnly'
-                : 'parking.saveFailed',
+          : isApiError(error) && error.code === 'INVALID_EFFECTIVE_DATE'
+            ? 'parking.invalidFuture'
+            : isApiError(error) && error.status === 403
+              ? 'parking.adminOnly'
+              : 'parking.saveFailed',
       );
     }
   };
@@ -96,8 +90,8 @@ export function VehicleParkingSection({
   });
   const money = (amount: number) => formatMoney(amount, i18n.resolvedLanguage ?? 'zh-CN');
   return (
-    <Box component="section" sx={{ borderBottom: 1, borderColor: 'divider', py: 3 }}>
-      <Typography component="h2" variant="h5" mb={2}>
+    <Paper component="section" variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
+      <Typography component="h2" variant="h6" fontWeight={600} mb={2}>
         {t('parking.title')}
       </Typography>
       {parking && (
@@ -124,12 +118,7 @@ export function VehicleParkingSection({
               {money(vehicle.parking?.monthly_rate.amount ?? parking.monthly_rate.amount)}
             </Typography>
             <Typography color="text.secondary">
-              {parking.starts_on} → {parking.ends_on ?? t('parking.openEnded')} ·{' '}
-              {parking.pool_label}
-            </Typography>
-            <Typography color="text.secondary">
-              {t('parking.anchor')}: {parking.billing_anchor_day} ·{' '}
-              {parking.payment_terms || t('parking.defaultTerms')}
+              {parking.starts_on} → {parking.ends_on ?? t('parking.openEnded')}
             </Typography>
           </Box>
           <Typography component="h3" variant="h6" mt={2}>
@@ -185,45 +174,6 @@ export function VehicleParkingSection({
       {canEdit && (
         <Box component="form" onSubmit={submit} noValidate mt={2}>
           <Stack spacing={2}>
-            {pools.isError && (
-              <Alert
-                severity="error"
-                action={<Button onClick={() => void pools.refetch()}>{t('app.retry')}</Button>}
-              >
-                {t('common.loadFailedBody')}
-              </Alert>
-            )}
-            <Controller
-              name="pool_id"
-              control={form.control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  select
-                  label={t('parking.category')}
-                  required
-                  disabled={busy || Boolean(parking)}
-                  error={Boolean(errors.pool_id)}
-                  helperText={errors.pool_id?.message ? t(errors.pool_id.message) : undefined}
-                >
-                  <MenuItem value="">{t('parking.choose')}</MenuItem>
-                  {field.value && !pools.data?.some((pool) => pool.id === field.value) && (
-                    <MenuItem value={field.value}>
-                      {parking?.pool_label ?? t('app.loading')}
-                    </MenuItem>
-                  )}
-                  {pools.data?.map((pool) => (
-                    <MenuItem
-                      key={pool.id}
-                      value={pool.id}
-                      disabled={!pool.allowed_vehicle_types.includes(vehicle.vehicle_type)}
-                    >
-                      {pool.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              )}
-            />
             <TextField
               label={t('parking.starts')}
               type="date"
@@ -238,7 +188,9 @@ export function VehicleParkingSection({
                 input: { readOnly: busy || Boolean(parking) },
               }}
               error={Boolean(errors.starts_on)}
-              helperText={errors.starts_on?.message ? t(errors.starts_on.message) : undefined}
+              helperText={
+                errors.starts_on?.message ? t(errors.starts_on.message) : t('parking.cycleHint')
+              }
             />
             <TextField
               label={t('parking.ends')}
@@ -273,12 +225,6 @@ export function VehicleParkingSection({
                 }
               />
             )}
-            {!parking && (
-              <Typography>
-                {t('parking.inherit', { day: customer?.billing_anchor_day ?? 1 })}{' '}
-                {customer?.payment_terms ?? ''}
-              </Typography>
-            )}
             <TextField
               label={t('parking.reason')}
               required
@@ -291,9 +237,7 @@ export function VehicleParkingSection({
             <Button
               type="submit"
               variant="contained"
-              disabled={
-                busy || !pools.data?.length || !vehicle.is_active || errorKey === 'parking.stale'
-              }
+              disabled={busy || !vehicle.is_active || errorKey === 'parking.stale'}
             >
               {t('parking.save')}
             </Button>
@@ -334,6 +278,6 @@ export function VehicleParkingSection({
           {t('parking.endReview')}
         </Alert>
       )}
-    </Box>
+    </Paper>
   );
 }

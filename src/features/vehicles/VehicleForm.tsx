@@ -60,6 +60,8 @@ const KNOWN_FIELDS: ReadonlySet<string> = new Set<FieldName>([
   'unit_number',
   'plate_number',
   'plate_jurisdiction',
+  'monthly_rate',
+  'parking_starts_on',
 ]);
 
 // Error codes the backend can send, mapped to plain-language messages.
@@ -69,6 +71,7 @@ const CODE_MESSAGES: Record<string, string> = {
   IDENTIFIER_REQUIRED: 'vehicles.errors.identifierRequired',
   INVALID_USDOT: 'vehicles.errors.usdotDigits',
   REQUIRED: 'vehicles.errors.required',
+  INVALID_PARKING: 'parking.saveFailed',
 };
 
 // When the backend sends only a code, this is the field it belongs to.
@@ -103,6 +106,7 @@ export function VehicleForm({
   const { register, control, handleSubmit, watch, formState, setError, setFocus, setValue } = form;
   const { errors, isSubmitting, isDirty } = formState;
   const method = watch('method');
+  const monthlyRate = watch('monthly_rate')?.trim();
   const usdotValue = (watch('usdot_number') ?? '').trim();
 
   // The fields not needed for the chosen method live in the collapsed section.
@@ -344,6 +348,11 @@ export function VehicleForm({
 
         <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
           <Stack spacing={3}>
+            {lockedOwner && (
+              <Typography component="h2" variant="h6" fontWeight={600}>
+                {t('vehicles.editTitle')}
+              </Typography>
+            )}
             <Typography variant="body2" color="text.secondary">
               {t('common.requiredHint')}
             </Typography>
@@ -466,6 +475,37 @@ export function VehicleForm({
             </Stack>
           </AccordionDetails>
         </Accordion>
+
+        {!lockedOwner && (
+          <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
+            <Stack spacing={2}>
+              <Typography component="h2" variant="h6" fontWeight={600}>
+                {t('parking.title')}
+              </Typography>
+              <TextField
+                label={`${t('parking.rate')} (${t('common.optional')})`}
+                fullWidth
+                slotProps={{ htmlInput: { inputMode: 'decimal' } }}
+                error={Boolean(errors.monthly_rate)}
+                helperText={fieldError('monthly_rate') ?? t('parking.createHint')}
+                {...register('monthly_rate')}
+              />
+              {monthlyRate && (
+                <TextField
+                  label={t('parking.starts')}
+                  type="date"
+                  required
+                  fullWidth
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  error={Boolean(errors.parking_starts_on)}
+                  helperText={fieldError('parking_starts_on') ?? t('parking.cycleHint')}
+                  {...register('parking_starts_on')}
+                />
+              )}
+              <Typography color="text.secondary">{t('parking.noDebt')}</Typography>
+            </Stack>
+          </Paper>
+        )}
 
         <Stack
           direction={{ xs: 'column-reverse', sm: 'row' }}

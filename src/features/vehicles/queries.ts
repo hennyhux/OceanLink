@@ -1,7 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { vehicleKeys, vehiclesApi } from './api';
-import type { Vehicle, VehicleListParams, VehicleWrite } from './types';
+import type { Vehicle, VehicleCreateWrite, VehicleListParams, VehicleWrite } from './types';
 
 export function useVehicleList(params: VehicleListParams) {
   return useQuery({
@@ -22,10 +22,12 @@ export function useVehicle(id: string | undefined) {
 export function useCreateVehicle() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: VehicleWrite) => vehiclesApi.create(body),
+    mutationFn: (body: VehicleCreateWrite) => vehiclesApi.create(body),
     onSuccess: (created) => {
       queryClient.setQueryData(vehicleKeys.detail(created.id), created);
       void queryClient.invalidateQueries({ queryKey: vehicleKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: ['ledger'] });
+      void queryClient.invalidateQueries({ queryKey: ['overview'] });
     },
   });
 }

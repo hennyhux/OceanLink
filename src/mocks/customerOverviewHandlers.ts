@@ -11,22 +11,30 @@ export const customerOverviewHandlers: HttpHandler[] = [
     const page = listMockCustomers({
       q: url.searchParams.get('q') ?? '',
       includeInactive: url.searchParams.get('include_inactive') === 'true',
+      predicate:
+        url.searchParams.get('overdue_only') === 'true'
+          ? (customer) => mockCustomerLedger(customer.id).overdue.amount > 0
+          : undefined,
       page: Number(url.searchParams.get('page') ?? '1'),
       pageSize: Number(url.searchParams.get('page_size') ?? '20'),
     });
     const vehicles = mockVehicles();
     const result: Paged<CustomerListItem> = {
       ...page,
-      items: page.items.map((customer) => ({
-        ...customer,
-        net_balance: mockCustomerLedger(customer.id).net_balance,
-        truck_count: vehicles.filter(
-          (vehicle) =>
-            vehicle.customer_id === customer.id &&
-            vehicle.is_active &&
-            (vehicle.vehicle_type === 'truck' || vehicle.vehicle_type === 'combination'),
-        ).length,
-      })),
+      items: page.items.map((customer) => {
+        const ledger = mockCustomerLedger(customer.id);
+        return {
+          ...customer,
+          net_balance: ledger.net_balance,
+          overdue_balance: ledger.overdue,
+          truck_count: vehicles.filter(
+            (vehicle) =>
+              vehicle.customer_id === customer.id &&
+              vehicle.is_active &&
+              (vehicle.vehicle_type === 'truck' || vehicle.vehicle_type === 'combination'),
+          ).length,
+        };
+      }),
     };
     return HttpResponse.json(result);
   }),

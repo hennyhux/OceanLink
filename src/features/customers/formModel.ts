@@ -33,8 +33,6 @@ export const customerFormSchema = z.object({
   state: optionalText(50),
   postal_code: optionalText(20),
   notes: optionalText(2000),
-  billing_anchor_day: z.string().regex(/^([1-9]|[12]\d|3[01])$/, 'parking.invalidAnchor'),
-  payment_terms: optionalText(1000),
 });
 
 export type CustomerFormValues = z.infer<typeof customerFormSchema>;
@@ -52,8 +50,6 @@ export const emptyCustomerForm: CustomerFormValues = {
   state: '',
   postal_code: '',
   notes: '',
-  billing_anchor_day: '1',
-  payment_terms: '',
 };
 
 export function customerToForm(customer: Customer): CustomerFormValues {
@@ -70,8 +66,6 @@ export function customerToForm(customer: Customer): CustomerFormValues {
     state: customer.state ?? '',
     postal_code: customer.postal_code ?? '',
     notes: customer.notes ?? '',
-    billing_anchor_day: String(customer.billing_anchor_day ?? 1),
-    payment_terms: customer.payment_terms ?? '',
   };
 }
 
@@ -94,8 +88,6 @@ export function formToWrite(values: CustomerFormValues): CustomerWrite {
     state: blankToNull(values.state),
     postal_code: blankToNull(values.postal_code),
     notes: blankToNull(values.notes),
-    billing_anchor_day: Number(values.billing_anchor_day),
-    payment_terms: values.payment_terms?.trim() ?? '',
   };
 }
 

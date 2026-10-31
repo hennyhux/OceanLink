@@ -4,26 +4,34 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import Collapse from '@mui/material/Collapse';
 import Stack from '@mui/material/Stack';
+import AddIcon from '@mui/icons-material/Add';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatMoney } from '@/lib/money';
-import { useVehicleList } from '@/features/vehicles/queries';
 import { useCustomerLedger } from './api';
 import { BillingReviewDialog } from './BillingReviewDialog';
+import { ManualDebitDialog } from './ManualDebitDialog';
+import type { ManualDebitInvoice } from './manualDebitModel';
 
-export function CustomerAccount({ customerId }: { customerId: string }) {
+export function CustomerAccount({
+  customerId,
+  customerName,
+  onRecordPayment,
+}: {
+  customerId: string;
+  customerName: string;
+  onRecordPayment: () => void;
+}) {
   const { t, i18n } = useTranslation();
   const query = useCustomerLedger(customerId);
-  const vehicles = useVehicleList({ customer_id: customerId, page_size: 100 });
   const data = query.data;
-  const truckCount = vehicles.data?.items.filter(
-    (vehicle) => vehicle.vehicle_type === 'truck' || vehicle.vehicle_type === 'combination',
-  ).length;
   const [details, setDetails] = useState(false);
   const [review, setReview] = useState(false);
   const [billed, setBilled] = useState(false);
+  const [manualDebitOpen, setManualDebitOpen] = useState(false);
+  const [manualDebitIssued, setManualDebitIssued] = useState<ManualDebitInvoice | null>(null);
   const money = (amount: number) => formatMoney(amount, i18n.resolvedLanguage ?? 'zh-CN');
   return (
     <Box component="section">
@@ -41,49 +49,72 @@ export function CustomerAccount({ customerId }: { customerId: string }) {
       )}
       {data && (
         <>
+          <Box component="dl" sx={{ m: 0 }}>
+            <Typography component="dt" color="text.secondary" sx={{ fontSize: 16 }}>
+              {t(data.net_balance.amount < 0 ? 'account.creditBalance' : 'account.owes')}
+            </Typography>
+            <Typography
+              component="dd"
+              sx={{
+                m: 0,
+                fontSize: { xs: '2rem', sm: '2.25rem' },
+                lineHeight: 1.2,
+                fontWeight: 700,
+                fontVariantNumeric: 'tabular-nums',
+                color: data.net_balance.amount > 0 ? 'error.main' : 'text.primary',
+              }}
+            >
+              {money(Math.abs(data.net_balance.amount))}
+            </Typography>
+            {data.overdue.amount > 0 && (
+              <Typography color="error.main" sx={{ fontSize: 16, mt: 0.25 }}>
+                {t('account.overdueShort')}: {money(data.overdue.amount)}
+              </Typography>
+            )}
+            <Button
+              fullWidth
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={onRecordPayment}
+              sx={{ mt: 1.5, minHeight: 48 }}
+            >
+              {t('payments.record')}
+            </Button>
+          </Box>
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => setManualDebitOpen(true)}
+            sx={{ mt: 1, minHeight: 48 }}
+          >
+            {t('billing.manualAction')}
+          </Button>
           <Box
             component="dl"
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: '1fr 1fr 1fr' },
-              gap: 3,
+              gap: { xs: 1.5, sm: 2 },
               m: 0,
-              pb: 2,
+              mt: 2,
+              pt: 2,
+              borderTop: 1,
+              borderColor: 'divider',
             }}
           >
             <Box>
-              <Typography component="dt" color="text.secondary">
-                {t(data.net_balance.amount < 0 ? 'account.creditBalance' : 'account.owes')}
-              </Typography>
-              <Typography
-                component="dd"
-                sx={{ m: 0, fontSize: '2rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
-              >
-                {money(Math.abs(data.net_balance.amount))}
-              </Typography>
-              {data.overdue.amount > 0 && (
-                <Typography color="error.main">
-                  {t('account.overdueShort')}: {money(data.overdue.amount)}
-                </Typography>
-              )}
-            </Box>
-            <Box>
-              <Typography component="dt" color="text.secondary">
+              <Typography component="dt" color="text.secondary" sx={{ fontSize: 16 }}>
                 {t('account.lastPayment')}
               </Typography>
               <Box component="dd" sx={{ m: 0 }}>
                 {data.last_payment ? (
-                  <>
+                  <Stack direction="row" flexWrap="wrap" alignItems="baseline" gap={1}>
                     <Typography
-                      sx={{
-                        fontSize: '1.5rem',
-                        fontWeight: 600,
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
+                      sx={{ fontSize: 16, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
                     >
                       {money(data.last_payment.amount.amount)}
                     </Typography>
-                    <Typography color="text.secondary">
+                    <Typography color="text.secondary" sx={{ fontSize: 16 }}>
                       {new Intl.DateTimeFormat(i18n.resolvedLanguage, {
                         dateStyle: 'medium',
                         timeZone: 'UTC',
@@ -93,29 +124,24 @@ export function CustomerAccount({ customerId }: { customerId: string }) {
                         defaultValue: t('account.methods.other'),
                       })}
                     </Typography>
-                  </>
+                  </Stack>
                 ) : (
-                  <Typography>{t('account.noPayment')}</Typography>
+                  <Typography sx={{ fontSize: 16 }}>{t('account.noPayment')}</Typography>
                 )}
               </Box>
             </Box>
-            {truckCount !== undefined && (
-              <Box>
-                <Typography component="dt" color="text.secondary">
-                  {t('account.trucks')}
-                </Typography>
-                <Typography
-                  component="dd"
-                  sx={{ m: 0, fontSize: '1.5rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
-                >
-                  {truckCount}
-                </Typography>
-              </Box>
-            )}
           </Box>
           {billed && (
             <Alert severity="success" role="status" onClose={() => setBilled(false)}>
               {t('billing.issued')}
+            </Alert>
+          )}
+          {manualDebitIssued && (
+            <Alert severity="success" role="status" onClose={() => setManualDebitIssued(null)}>
+              {t('billing.manualIssued', {
+                number: manualDebitIssued.invoice_number,
+                amount: money(manualDebitIssued.total.amount),
+              })}
             </Alert>
           )}
           {data.monthly_parking && (
@@ -140,6 +166,7 @@ export function CustomerAccount({ customerId }: { customerId: string }) {
                 variant={data.unbilled_parking?.amount ? 'contained' : 'outlined'}
                 startIcon={<ReceiptLongOutlinedIcon />}
                 onClick={() => setReview(true)}
+                sx={{ minHeight: 48 }}
               >
                 {t('billing.review')}
               </Button>
@@ -152,7 +179,7 @@ export function CustomerAccount({ customerId }: { customerId: string }) {
             onClick={() => setDetails(!details)}
             aria-expanded={details}
             aria-controls={`account-breakdown-${customerId}`}
-            sx={{ mt: 1 }}
+            sx={{ mt: 1, minHeight: 48 }}
           >
             {t('account.breakdown')}
           </Button>
@@ -167,7 +194,13 @@ export function CustomerAccount({ customerId }: { customerId: string }) {
               ).map(([key, amount]) => (
                 <Stack key={key} direction="row" justifyContent="space-between" gap={2}>
                   <Typography>{t(key)}</Typography>
-                  <Typography sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                  <Typography
+                    sx={{
+                      fontVariantNumeric: 'tabular-nums',
+                      color:
+                        key === 'account.overdue' && amount > 0 ? 'error.main' : 'text.primary',
+                    }}
+                  >
                     {money(amount)}
                   </Typography>
                 </Stack>
@@ -188,6 +221,16 @@ export function CustomerAccount({ customerId }: { customerId: string }) {
           customerId={customerId}
           onClose={() => setReview(false)}
           onIssued={() => setBilled(true)}
+        />
+      )}
+      {manualDebitOpen && (
+        <ManualDebitDialog
+          customer={{ id: customerId, display_name: customerName }}
+          onClose={() => setManualDebitOpen(false)}
+          onIssued={(invoice) => {
+            setManualDebitOpen(false);
+            setManualDebitIssued(invoice);
+          }}
         />
       )}
     </Box>

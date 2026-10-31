@@ -1,8 +1,10 @@
 import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -12,7 +14,6 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ErrorState } from '@/components/ErrorState';
 import type { FlashState } from '@/components/FlashMessage';
 import { LoadingState } from '@/components/LoadingState';
-import { PageHeader } from '@/components/PageHeader';
 import { useCustomer } from '@/features/customers/queries';
 import { isApiError, isNetworkError, isNotFound, isStaleVersion } from '@/lib/api/errors';
 import { safeReturnTo } from '@/lib/navigation';
@@ -112,15 +113,47 @@ export function VehicleEditPage() {
         component={RouterLink}
         to={returnTo}
         underline="hover"
-        sx={{ display: 'inline-block', mb: 1 }}
+        sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 48, mb: 1, fontSize: 16 }}
       >
         ← {t('common.back')}
       </Link>
-      <PageHeader
-        title={t('vehicles.editTitle')}
-        description={vehicleTitle(vehicle, unitLabel)}
-        action={<ActiveStatusChip isActive={vehicle.is_active} />}
-      />
+      <Box
+        component="header"
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) auto',
+          columnGap: { xs: 1, sm: 2 },
+          rowGap: 0.5,
+          alignItems: 'center',
+          mb: 3,
+        }}
+      >
+        <Typography
+          component="h1"
+          variant="h4"
+          fontWeight={600}
+          sx={{
+            gridColumn: 1,
+            minWidth: 0,
+            maxWidth: '100%',
+            fontSize: { xs: '1.5rem', sm: '2rem' },
+            lineHeight: 1.2,
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {vehicleTitle(vehicle, unitLabel)}
+        </Typography>
+        <Typography
+          color="text.secondary"
+          sx={{ gridColumn: '1 / -1', fontSize: 16, overflowWrap: 'anywhere' }}
+        >
+          {t(`vehicles.type.${vehicle.vehicle_type}`)}
+          {vehicle.usdot_number ? ` · USDOT ${vehicle.usdot_number}` : ''}
+        </Typography>
+        <Box sx={{ gridColumn: 2, gridRow: 1 }}>
+          <ActiveStatusChip isActive={vehicle.is_active} />
+        </Box>
+      </Box>
 
       {!vehicle.is_active && (
         <Alert severity="warning" role="status" sx={{ mb: 2 }}>
@@ -144,11 +177,7 @@ export function VehicleEditPage() {
       )}
 
       <Stack spacing={2}>
-        <VehicleParkingSection
-          vehicle={vehicle}
-          customer={customerQuery.data}
-          onDirtyChange={setParkingDirty}
-        />
+        <VehicleParkingSection vehicle={vehicle} onDirtyChange={setParkingDirty} />
         <VehicleForm
           additionalDirty={parkingDirty}
           key={reloadCount}

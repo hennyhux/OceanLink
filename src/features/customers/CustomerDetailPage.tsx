@@ -2,18 +2,20 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Chip from '@mui/material/Chip';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
+import Collapse from '@mui/material/Collapse';
 import Grid from '@mui/material/Grid';
+import IconButton from '@mui/material/IconButton';
 import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import { alpha } from '@mui/material/styles';
+import Tooltip from '@mui/material/Tooltip';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router';
@@ -22,10 +24,10 @@ import { ActiveStatusChip } from '@/components/ActiveStatusChip';
 import { ErrorState } from '@/components/ErrorState';
 import { FlashMessage } from '@/components/FlashMessage';
 import { LoadingState } from '@/components/LoadingState';
-import { PageHeader } from '@/components/PageHeader';
 import { CustomerVehicles } from '@/features/vehicles/CustomerVehicles';
 import { CustomerAccount } from '@/features/billing/CustomerAccount';
 import { PaymentsPage } from '@/features/payments/PaymentsPage';
+import { RecordPaymentDialog } from '@/features/payments/RecordPaymentDialog';
 import { isApiError, isNetworkError, isNotFound, isStaleVersion } from '@/lib/api/errors';
 
 import { useCustomer, useSetCustomerActive } from './queries';
@@ -35,10 +37,13 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
   const { t } = useTranslation();
   return (
     <Grid size={{ xs: 12, sm: 6 }}>
-      <Typography variant="body2" color="text.secondary" component="dt">
+      <Typography variant="body2" color="text.secondary" component="dt" sx={{ fontSize: 16 }}>
         {label}
       </Typography>
-      <Typography component="dd" sx={{ m: 0, overflowWrap: 'anywhere' }}>
+      <Typography
+        component="dd"
+        sx={{ m: 0, fontSize: 16, lineHeight: 1.5, overflowWrap: 'anywhere' }}
+      >
         {value || (
           <span style={{ color: 'inherit', opacity: 0.75 }}>{t('common.notProvided')}</span>
         )}
@@ -70,6 +75,9 @@ export function CustomerDetailPage() {
   const customerQuery = useCustomer(id);
   const setActive = useSetCustomerActive(id);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [contactDetailsOpen, setContactDetailsOpen] = useState(false);
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
+  const [paymentSaved, setPaymentSaved] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionDone, setActionDone] = useState<string | null>(null);
 
@@ -131,45 +139,78 @@ export function CustomerDetailPage() {
         component={RouterLink}
         to="/customers"
         underline="hover"
-        sx={{ display: 'inline-block', mb: 1 }}
+        sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 48, mb: 1, fontSize: 16 }}
       >
         ← {t('customers.backToList')}
       </Link>
-      <PageHeader
-        title={
-          <Box
-            component="span"
-            sx={{
-              display: 'inline-flex',
-              px: 1.5,
-              py: 0.75,
-              border: 2,
-              borderColor: 'primary.dark',
-              borderRadius: 1,
-              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
-            }}
-          >
-            {customer.display_name}
-          </Box>
-        }
-        description={`${t(`customers.type.${customer.type}`)}${
-          customer.usdot_number ? ` · USDOT ${customer.usdot_number}` : ''
-        }`}
-        action={
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Chip label={t('customers.selected')} color="primary" />
-            <ActiveStatusChip isActive={customer.is_active} />
-            <Button
+      <Box
+        component="header"
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) auto',
+          columnGap: { xs: 1, sm: 2 },
+          rowGap: 0.5,
+          alignItems: 'center',
+          mb: 3,
+        }}
+      >
+        <Typography
+          component="h1"
+          variant="h4"
+          fontWeight={600}
+          sx={{
+            gridColumn: 1,
+            minWidth: 0,
+            maxWidth: '100%',
+            fontSize: { xs: '1.5rem', sm: '2rem' },
+            lineHeight: 1.2,
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {customer.display_name}
+        </Typography>
+        <Typography
+          color="text.secondary"
+          sx={{ gridColumn: '1 / -1', fontSize: 16, overflowWrap: 'anywhere' }}
+        >
+          {t(`customers.type.${customer.type}`)}
+          {customer.usdot_number ? ` · USDOT ${customer.usdot_number}` : ''}
+        </Typography>
+        <Stack
+          direction="row"
+          spacing={{ xs: 0.5, sm: 1 }}
+          alignItems="center"
+          sx={{ gridColumn: 2, gridRow: 1 }}
+        >
+          <ActiveStatusChip isActive={customer.is_active} />
+          <Tooltip title={t('common.edit')}>
+            <IconButton
               component={RouterLink}
               to={`/customers/${customer.id}/edit`}
-              variant="contained"
-              startIcon={<EditOutlinedIcon />}
+              aria-label={t('common.edit')}
+              sx={{
+                display: { xs: 'inline-flex', sm: 'none' },
+                width: 48,
+                height: 48,
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+              }}
             >
-              {t('common.edit')}
-            </Button>
-          </Stack>
-        }
-      />
+              <EditOutlinedIcon />
+            </IconButton>
+          </Tooltip>
+          <Button
+            component={RouterLink}
+            to={`/customers/${customer.id}/edit`}
+            variant="contained"
+            startIcon={<EditOutlinedIcon />}
+            sx={{ minHeight: 48, display: { xs: 'none', sm: 'inline-flex' } }}
+          >
+            {t('common.edit')}
+          </Button>
+        </Stack>
+      </Box>
 
       {!customer.is_active && (
         <Alert severity="warning" role="status" sx={{ mb: 2 }}>
@@ -189,52 +230,100 @@ export function CustomerDetailPage() {
 
       <Stack spacing={2}>
         <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
-          <CustomerAccount customerId={customer.id} />
+          <CustomerAccount
+            customerId={customer.id}
+            customerName={customer.display_name}
+            onRecordPayment={() => {
+              setPaymentSaved(false);
+              setRecordPaymentOpen(true);
+            }}
+          />
         </Paper>
+        {paymentSaved && (
+          <Alert severity="success" role="status" onClose={() => setPaymentSaved(false)}>
+            {t('payments.savedShort')}
+          </Alert>
+        )}
         <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
-          <PaymentsPage customer={customer} />
+          <PaymentsPage customer={customer} showRecordAction={false} />
         </Paper>
-        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
-          <Typography component="h2" variant="h6" fontWeight={600} sx={{ mb: 2 }}>
-            {t('customers.sections.contact')}
-          </Typography>
-          <Grid container spacing={2} component="dl" sx={{ m: 0 }}>
-            {customer.type === 'business' && (
-              <Field label={t('customers.fields.contactName')} value={customer.contact_name} />
-            )}
-            <Field
-              label={t('customers.fields.phone')}
-              value={customer.phone && <Link href={`tel:${customer.phone}`}>{customer.phone}</Link>}
-            />
-            <Field
-              label={t('customers.fields.email')}
-              value={
-                customer.email && <Link href={`mailto:${customer.email}`}>{customer.email}</Link>
-              }
-            />
-            <Field label={t('customers.fields.usdot')} value={customer.usdot_number} />
-            <Field
-              label={t('customers.fields.address')}
-              value={address && <span style={{ whiteSpace: 'pre-line' }}>{address}</span>}
-            />
-            <Field
-              label={t('customers.fields.notes')}
-              value={
-                customer.notes && <span style={{ whiteSpace: 'pre-line' }}>{customer.notes}</span>
-              }
-            />
-            <Field
-              label={t('customers.fields.created')}
-              value={formatDate(customer.created_at, i18n.resolvedLanguage ?? 'en')}
-            />
-            <Field
-              label={t('customers.fields.updated')}
-              value={formatDate(customer.updated_at, i18n.resolvedLanguage ?? 'en')}
-            />
-          </Grid>
-        </Paper>
-
         <CustomerVehicles customerId={customer.id} />
+        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
+          <Stack spacing={2}>
+            <Typography component="h2" variant="h6" fontWeight={600}>
+              {t('customers.sections.contact')}
+            </Typography>
+            <Grid container spacing={2} component="dl" sx={{ m: 0 }}>
+              {customer.type === 'business' && (
+                <Field label={t('customers.fields.contactName')} value={customer.contact_name} />
+              )}
+              <Field
+                label={t('customers.fields.phone')}
+                value={
+                  customer.phone && <Link href={`tel:${customer.phone}`}>{customer.phone}</Link>
+                }
+              />
+            </Grid>
+            <Button
+              type="button"
+              variant="text"
+              startIcon={
+                <ExpandMoreIcon
+                  sx={{ transform: contactDetailsOpen ? 'rotate(180deg)' : undefined }}
+                />
+              }
+              aria-expanded={contactDetailsOpen}
+              aria-controls={`customer-contact-details-${customer.id}`}
+              onClick={() => setContactDetailsOpen((open) => !open)}
+              sx={{ alignSelf: 'flex-start', minHeight: 48 }}
+            >
+              {t(
+                contactDetailsOpen
+                  ? 'customers.hideContactDetails'
+                  : 'customers.showContactDetails',
+              )}
+            </Button>
+            <Collapse in={contactDetailsOpen}>
+              <Grid
+                id={`customer-contact-details-${customer.id}`}
+                container
+                spacing={2}
+                component="dl"
+                sx={{ m: 0 }}
+              >
+                <Field
+                  label={t('customers.fields.email')}
+                  value={
+                    customer.email && (
+                      <Link href={`mailto:${customer.email}`}>{customer.email}</Link>
+                    )
+                  }
+                />
+                <Field label={t('customers.fields.usdot')} value={customer.usdot_number} />
+                <Field
+                  label={t('customers.fields.address')}
+                  value={address && <span style={{ whiteSpace: 'pre-line' }}>{address}</span>}
+                />
+                <Field
+                  label={t('customers.fields.notes')}
+                  value={
+                    customer.notes && (
+                      <span style={{ whiteSpace: 'pre-line' }}>{customer.notes}</span>
+                    )
+                  }
+                />
+                <Field
+                  label={t('customers.fields.created')}
+                  value={formatDate(customer.created_at, i18n.resolvedLanguage ?? 'en')}
+                />
+                <Field
+                  label={t('customers.fields.updated')}
+                  value={formatDate(customer.updated_at, i18n.resolvedLanguage ?? 'en')}
+                />
+              </Grid>
+            </Collapse>
+          </Stack>
+        </Paper>
 
         <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
           {customer.is_active ? (
@@ -243,6 +332,7 @@ export function CustomerDetailPage() {
               variant="outlined"
               onClick={() => setConfirmOpen(true)}
               disabled={setActive.isPending}
+              sx={{ minHeight: 48 }}
             >
               {t('customers.deactivate.action')}
             </Button>
@@ -251,6 +341,7 @@ export function CustomerDetailPage() {
               variant="outlined"
               onClick={() => void changeActive(true)}
               disabled={setActive.isPending}
+              sx={{ minHeight: 48 }}
             >
               {t('customers.reactivate.action')}
             </Button>
@@ -286,6 +377,16 @@ export function CustomerDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
+      {recordPaymentOpen && (
+        <RecordPaymentDialog
+          customer={customer}
+          onClose={() => setRecordPaymentOpen(false)}
+          onSaved={() => {
+            setRecordPaymentOpen(false);
+            setPaymentSaved(true);
+          }}
+        />
+      )}
     </>
   );
 }

@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { http } from '@/lib/api/http';
+import { toQueryString, type Paged } from '@/lib/api/paging';
 import type { Money } from '@/lib/money';
 import type { BillingRun } from './model';
+import type { ManualDebitInvoice, ManualDebitWrite } from './manualDebitModel';
 
 export interface CustomerLedger {
   as_of: string;
@@ -15,6 +17,13 @@ export interface CustomerLedger {
 }
 
 export const billingKeys = { ledger: (id: string) => ['ledger', id] as const };
+export interface ManualDebitFilters {
+  q?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  page_size?: number;
+}
 export const billingApi = {
   preview: (customerId: string, throughDate: string) =>
     http.post<BillingRun>('/billing-runs/preview', {
@@ -34,6 +43,23 @@ export const billingApi = {
       window.clearTimeout(timer);
     }
   },
+  createManualDebit: (body: ManualDebitWrite, key: string) =>
+    http.post<ManualDebitInvoice>('/invoices', body, { idempotencyKey: key }),
+  issueManualDebit: (id: string, key: string) =>
+    http.post<ManualDebitInvoice>(`/invoices/${encodeURIComponent(id)}/issue`, undefined, {
+      idempotencyKey: key,
+    }),
+  manualDebits: (customerId: string, filters: ManualDebitFilters, signal?: AbortSignal) =>
+    http.get<Paged<ManualDebitInvoice>>(
+      `/invoices${toQueryString({
+        customer_id: customerId,
+        source_type: 'manual',
+        page: 1,
+        page_size: 20,
+        ...filters,
+      })}`,
+      { signal },
+    ),
 };
 export function useCustomerLedger(id: string) {
   return useQuery({

@@ -11,6 +11,7 @@ import { server } from '@/mocks/server';
 import { billingReplay, issueBilling, billingRun } from '@/mocks/billingStore';
 import { mockCustomerLedger, applyMockCredit } from '@/mocks/paymentStore';
 import { billingApi } from './api';
+import { overviewApi } from '@/features/overview/api';
 
 const customerId = 'c0000001-0000-4000-8000-000000000004';
 const today = todayInTimeZone('UTC');
@@ -28,7 +29,6 @@ async function setup() {
     });
     const starts_on = `${today.slice(0, 7)}-01`;
     await vehiclesApi.saveParking(vehicle.id, vehicle.version, {
-      pool_id: 'mock-standard',
       starts_on,
       ends_on: null,
       monthly_rate: { amount, currency: 'USD' },
@@ -39,6 +39,49 @@ async function setup() {
 }
 
 describe('customer monthly billing workflow', () => {
+  it('reviews and issues a custom debit as a separate invoice charge', async () => {
+    await setup();
+    const user = userEvent.setup();
+    const { queryClient } = renderApp({ route: `/customers/${customerId}` });
+    const summaryKey = ['overview', 'metrics'];
+    const customerListKey = ['customers', 'list', {}];
+    queryClient.setQueryDefaults(summaryKey, { staleTime: Infinity });
+    await queryClient.fetchQuery({ queryKey: summaryKey, queryFn: overviewApi.summary });
+    queryClient.setQueryData(customerListKey, { items: [] });
+
+    await user.click(await screen.findByRole('button', { name: 'Add one-time charge' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add customer debit' });
+    await user.type(
+      within(dialog).getByRole('textbox', { name: /Charge description/ }),
+      'Gate repair',
+    );
+    await user.type(within(dialog).getByRole('textbox', { name: /Amount \(USD\)/ }), '55.50');
+    await user.click(within(dialog).getByRole('button', { name: 'Review charge' }));
+
+    expect(await within(dialog).findByText('Gate repair')).toBeInTheDocument();
+    expect(within(dialog).getByText('$55.50')).toBeInTheDocument();
+    expect(within(dialog).getByText(/no payment is recorded/i)).toBeInTheDocument();
+    expect(screen.getByText('Outstanding balance').parentElement).toHaveTextContent('$0.00');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Issue charge' }));
+    expect(
+      await screen.findByText(/Invoice OL-MAN-000001 issued for \$55\.50/),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Outstanding balance').parentElement).toHaveTextContent('$55.50');
+    expect(screen.getByRole('heading', { name: 'Transaction history' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'One-time adjustments' })).toBeInTheDocument();
+    expect(screen.getByText('Gate repair')).toBeInTheDocument();
+    const manualAdjustments = screen.getByRole('region', { name: 'One-time adjustments' });
+    expect(within(manualAdjustments).getByText(/OL-MAN-000001/)).toBeInTheDocument();
+    expect(queryClient.getQueryState(summaryKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(customerListKey)?.isInvalidated).toBe(true);
+    const refreshed = await queryClient.fetchQuery({
+      queryKey: summaryKey,
+      queryFn: overviewApi.summary,
+    });
+    expect(refreshed.outstanding_invoices.amount).toBe(20550);
+  });
+
   it('reviews two truck charges, applies credit, and updates the visible amount due', async () => {
     await setup();
     await paymentsApi.record(
@@ -53,7 +96,9 @@ describe('customer monthly billing workflow', () => {
       crypto.randomUUID(),
     );
     const user = userEvent.setup();
-    renderApp({ route: `/customers/${customerId}` });
+    const { queryClient } = renderApp({ route: `/customers/${customerId}` });
+    queryClient.setQueryData(['overview', 'metrics'], {});
+    queryClient.setQueryData(['customers', 'list', {}], {});
     expect((await screen.findByText('Customer credit')).parentElement).toHaveTextContent('$420.00');
     expect(screen.getByText(/Not billed yet/)).toHaveTextContent('$450.00');
     await user.click(screen.getByRole('button', { name: 'Review monthly charges' }));
@@ -69,6 +114,8 @@ describe('customer monthly billing workflow', () => {
     await within(dialog).findByText(/Monthly charges issued. Outstanding balance updated/);
     expect(dialog).not.toHaveTextContent(/OL-\d+/);
     expect(screen.getByText('Outstanding balance').parentElement).toHaveTextContent('$30.00');
+    expect(queryClient.getQueryState(['overview', 'metrics'])?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(['customers', 'list', {}])?.isInvalidated).toBe(true);
     expect(screen.queryByText(/Not billed yet/)).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());

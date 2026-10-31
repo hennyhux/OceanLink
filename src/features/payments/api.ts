@@ -57,6 +57,8 @@ export function usePaymentMutation() {
       await Promise.all([
         client.invalidateQueries({ queryKey: paymentKeys.all }),
         client.invalidateQueries({ queryKey: ['ledger'] }),
+        client.invalidateQueries({ queryKey: ['overview'] }),
+        client.invalidateQueries({ queryKey: ['customers', 'list'] }),
       ]);
     },
   });

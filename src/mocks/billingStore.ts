@@ -1,4 +1,5 @@
 import type { BillingRun, MonthlyCharge } from '@/features/billing/model';
+import type { ManualDebitInvoice, ManualDebitWrite } from '@/features/billing/manualDebitModel';
 import { todayInTimeZone } from '@/lib/dates';
 import { findMockCustomer } from './customerHandlers';
 import { mockVehicles } from './vehicleHandlers';
@@ -24,16 +25,74 @@ interface SavedRun {
 }
 const runs = new Map<string, SavedRun>();
 const requests = new Map<string, { run_id: string; apply_credit: boolean }>();
+const manualDebitDraftRequests = new Map<string, { fingerprint: string; invoice_id: string }>();
+const manualDebitIssueRequests = new Map<string, string>();
 let invoices: ParkingInvoice[] = [];
+let manualDebitInvoices: ManualDebitInvoice[] = [];
 const money = (amount: number) => ({ amount, currency: 'USD' as const });
 
 export function resetMockBilling() {
   runs.clear();
   requests.clear();
+  manualDebitDraftRequests.clear();
+  manualDebitIssueRequests.clear();
   invoices = [];
+  manualDebitInvoices = [];
 }
 export function parkingInvoices(customerId: string) {
   return invoices.filter((invoice) => invoice.customer_id === customerId);
+}
+export function issuedManualDebits(customerId: string) {
+  return manualDebitInvoices.filter(
+    (invoice) => invoice.customer_id === customerId && invoice.status === 'issued',
+  );
+}
+export function createManualDebitDraft(
+  body: ManualDebitWrite,
+  requestKey: string,
+): ManualDebitInvoice {
+  const fingerprint = JSON.stringify(body);
+  const previous = manualDebitDraftRequests.get(requestKey);
+  if (previous) {
+    if (previous.fingerprint !== fingerprint) throw new Error('IDEMPOTENCY_CONFLICT');
+    return manualDebitInvoices.find((invoice) => invoice.id === previous.invoice_id)!;
+  }
+  const invoice: ManualDebitInvoice = {
+    customer_id: body.customer_id,
+    due_on: body.due_on,
+    description: body.description,
+    id: crypto.randomUUID(),
+    version: 1,
+    invoice_number: null,
+    issued_on: null,
+    status: 'draft',
+    total: body.amount,
+  };
+  manualDebitInvoices = [invoice, ...manualDebitInvoices];
+  manualDebitDraftRequests.set(requestKey, { fingerprint, invoice_id: invoice.id });
+  return invoice;
+}
+export function issueManualDebit(id: string, requestKey: string): ManualDebitInvoice {
+  const previousInvoiceId = manualDebitIssueRequests.get(requestKey);
+  if (previousInvoiceId) {
+    if (previousInvoiceId !== id) throw new Error('IDEMPOTENCY_CONFLICT');
+    return manualDebitInvoices.find((invoice) => invoice.id === id)!;
+  }
+  const draft = manualDebitInvoices.find((invoice) => invoice.id === id);
+  if (!draft) throw new Error('NOT_FOUND');
+  if (draft.status !== 'draft') throw new Error('INVOICE_NOT_EDITABLE');
+  const issued: ManualDebitInvoice = {
+    ...draft,
+    version: draft.version + 1,
+    invoice_number: `OL-MAN-${String(manualDebitInvoices.filter((item) => item.status === 'issued').length + 1).padStart(6, '0')}`,
+    issued_on: todayInTimeZone('UTC'),
+    status: 'issued',
+  };
+  manualDebitInvoices = manualDebitInvoices.map((invoice) =>
+    invoice.id === id ? issued : invoice,
+  );
+  manualDebitIssueRequests.set(requestKey, id);
+  return issued;
 }
 export function unbilledParking(customerId: string, through = todayInTimeZone('UTC')) {
   const all = monthlyCharges(

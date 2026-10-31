@@ -2,17 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { seedVehicles } from './vehicleHandlers';
 import { monthlyCharges } from './monthlyCharges';
 
-function vehicle(start = '2026-10-01', anchor = 1) {
+function vehicle(start = '2026-10-01') {
   return {
     ...seedVehicles()[0]!,
     parking: {
-      pool_id: 'mock-standard',
-      pool_label: 'Standard',
       starts_on: start,
       ends_on: null as string | null,
       monthly_rate: { amount: 30000, currency: 'USD' as const },
-      billing_anchor_day: anchor,
-      payment_terms: '',
       rate_history: [
         {
           effective_on: start,
@@ -32,16 +28,18 @@ describe('monthly parking charge preview', () => {
       [30000, 30000],
     );
   });
-  it('prorates a partial month by calendar days and rounds half up to cents', () => {
+  it('anchors a full billing month on the service start date', () => {
     const partial = vehicle('2026-11-16');
     expect(monthlyCharges([partial], '2026-11-20')[0]).toMatchObject({
-      service_days: 15,
+      starts_on: '2026-11-16',
+      ends_on: '2026-12-16',
+      service_days: 30,
       period_days: 30,
-      amount: { amount: 15000 },
+      amount: { amount: 30000 },
     });
   });
   it('restores the original anchor after February', () => {
-    const lines = monthlyCharges([vehicle('2026-01-31', 31)], '2026-03-31');
+    const lines = monthlyCharges([vehicle('2026-01-31')], '2026-03-31');
     expect(lines.map((line) => [line.starts_on, line.ends_on])).toEqual([
       ['2026-01-31', '2026-02-28'],
       ['2026-02-28', '2026-03-31'],

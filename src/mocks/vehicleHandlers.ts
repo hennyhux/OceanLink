@@ -1,11 +1,15 @@
 import { HttpResponse, http, type HttpHandler } from 'msw';
 
-import type { Vehicle, VehicleWrite } from '@/features/vehicles/types';
+import type { Vehicle, VehicleCreateWrite, VehicleWrite } from '@/features/vehicles/types';
 import type { ApiErrorBody } from '@/lib/api/errors';
 import type { Paged } from '@/lib/api/paging';
 
 import { findMockCustomer } from './customerHandlers';
-import type { VehicleParking } from '@/features/vehicles/parkingModel';
+import {
+  parkingSchema,
+  parkingToWrite,
+  type VehicleParking,
+} from '@/features/vehicles/parkingModel';
 
 const BASE = '/api/v1';
 
@@ -292,7 +296,7 @@ export const vehicleHandlers: HttpHandler[] = [
   }),
 
   http.post(`${BASE}/vehicles`, async ({ request }) => {
-    const body = (await request.json()) as Partial<VehicleWrite>;
+    const body = (await request.json()) as Partial<VehicleCreateWrite>;
     if (!body.customer_id || !findMockCustomer(body.customer_id)) {
       return errorResponse(422, 'VALIDATION_FAILED', 'Customer is required', {
         field_errors: { customer_id: ['REQUIRED'] },
@@ -316,12 +320,44 @@ export const vehicleHandlers: HttpHandler[] = [
         field_errors: { [duplicate.field]: [duplicate.code] },
       });
     }
+    let parking: VehicleParking | null = null;
+    if (body.parking !== undefined) {
+      const setup = body.parking;
+      const parsed = parkingSchema.safeParse({
+        ...setup,
+        ends_on: setup?.ends_on ?? '',
+        rate: (setup?.monthly_rate?.amount / 100).toFixed(2),
+      });
+      if (
+        !parsed.success ||
+        !Number.isSafeInteger(setup?.monthly_rate?.amount) ||
+        setup?.monthly_rate?.currency !== 'USD' ||
+        setup.effective_on !== setup.starts_on ||
+        !findMockCustomer(body.customer_id)?.is_active
+      ) {
+        return errorResponse(422, 'INVALID_PARKING', 'Initial monthly parking is invalid');
+      }
+      const write = parkingToWrite(parsed.data);
+      parking = {
+        starts_on: write.starts_on,
+        ends_on: write.ends_on,
+        monthly_rate: write.monthly_rate,
+        rate_history: [
+          {
+            effective_on: write.effective_on,
+            monthly_rate: write.monthly_rate,
+            reason: write.reason,
+          },
+        ],
+      };
+    }
     const now = new Date().toISOString();
     const created = makeVehicle({
       id: `v0000001-0000-4000-8000-${String(nextId).padStart(12, '0')}`,
       customer_id: body.customer_id,
       vehicle_type: body.vehicle_type ?? 'truck',
       ...merged,
+      parking,
       created_at: now,
       updated_at: now,
     });

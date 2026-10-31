@@ -17,13 +17,13 @@ export function monthlyCharges(vehicles: Vehicle[], through: string): MonthlyCha
     const start = new Date(`${parking.starts_on}T00:00:00Z`);
     const year = start.getUTCFullYear();
     let month = start.getUTCMonth();
-    if (iso(boundary(year, month, parking.billing_anchor_day)) > parking.starts_on) month -= 1;
+    const anchor = start.getUTCDate();
     const rates = [...parking.rate_history].sort((left, right) =>
       left.effective_on.localeCompare(right.effective_on),
     );
     for (;;) {
-      const periodStart = iso(boundary(year, month, parking.billing_anchor_day));
-      const periodEnd = iso(boundary(year, month + 1, parking.billing_anchor_day));
+      const periodStart = iso(boundary(year, month, anchor));
+      const periodEnd = iso(boundary(year, month + 1, anchor));
       if (periodStart > through || (parking.ends_on && periodStart >= parking.ends_on)) break;
       const serviceStart = periodStart > parking.starts_on ? periodStart : parking.starts_on;
       const serviceEnd =

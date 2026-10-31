@@ -78,6 +78,26 @@ export function AppShell() {
             </ListItem>
           );
         })}
+        {!isDesktop && user && (
+          <>
+            <Divider sx={{ my: 1 }} />
+            <ListItem disablePadding>
+              <ListItemButton
+                onClick={() => {
+                  setMobileOpen(false);
+                  void handleLogout();
+                }}
+                disabled={isLoggingOut}
+                sx={{ mx: 1, borderRadius: 2 }}
+              >
+                <ListItemIcon sx={{ minWidth: 40 }}>
+                  <LogoutOutlinedIcon aria-hidden />
+                </ListItemIcon>
+                <ListItemText primary={isLoggingOut ? t('auth.signingOut') : t('auth.signOut')} />
+              </ListItemButton>
+            </ListItem>
+          </>
+        )}
       </List>
     </Box>
   );
@@ -118,7 +138,7 @@ export function AppShell() {
             variant="h6"
             fontWeight={700}
             noWrap
-            sx={{ flexGrow: 1, minWidth: 0 }}
+            sx={{ flexGrow: 1, minWidth: 0, fontSize: { xs: '1rem', sm: '1.25rem' } }}
           >
             {t('app.name')}
           </Typography>
@@ -133,7 +153,7 @@ export function AppShell() {
               {t('auth.signedInAs', { name: user.name })}
             </Typography>
           )}
-          {isDesktop ? (
+          {isDesktop && user && (
             <Button
               onClick={() => void handleLogout()}
               disabled={isLoggingOut}
@@ -143,15 +163,6 @@ export function AppShell() {
             >
               {isLoggingOut ? t('auth.signingOut') : t('auth.signOut')}
             </Button>
-          ) : (
-            <IconButton
-              onClick={() => void handleLogout()}
-              disabled={isLoggingOut}
-              aria-label={isLoggingOut ? t('auth.signingOut') : t('auth.signOut')}
-              edge="end"
-            >
-              <LogoutOutlinedIcon />
-            </IconButton>
           )}
         </Toolbar>
       </AppBar>

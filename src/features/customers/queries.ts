@@ -29,6 +29,7 @@ export function useCreateCustomer() {
     onSuccess: (created) => {
       queryClient.setQueryData(customerKeys.detail(created.id), created);
       void queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: ['overview'] });
     },
   });
 }

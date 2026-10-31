@@ -6,7 +6,6 @@ import { renderApp } from '@/test/renderApp';
 import { signedIn } from '@/test/signedIn';
 import { server } from '@/mocks/server';
 import { config } from '@/lib/config';
-import { customersApi } from '@/features/customers/api';
 import { vehiclesApi } from './api';
 import { parkingToWrite, type VehicleParkingWrite } from './parkingModel';
 import type { Vehicle } from './types';
@@ -14,7 +13,6 @@ import type { Vehicle } from './types';
 const id = 'v0000001-0000-4000-8000-000000000001';
 const customerId = 'c0000001-0000-4000-8000-000000000001';
 const setup = parkingToWrite({
-  pool_id: 'mock-standard',
   starts_on: '2026-10-01',
   ends_on: '',
   rate: '200',
@@ -41,8 +39,10 @@ describe('vehicle-owned monthly parking', () => {
     const user = userEvent.setup();
     renderApp({ route: `/vehicles/${id}/edit` });
     await screen.findByRole('heading', { name: 'Monthly parking' });
-    await user.click(screen.getByRole('combobox', { name: 'Capacity category' }));
-    await user.click(await screen.findByRole('option', { name: 'Standard' }));
+    expect(screen.queryByLabelText('Capacity category')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Each full monthly charge period starts on this date and repeats monthly.'),
+    ).toBeInTheDocument();
     await user.type(screen.getByLabelText(/Billing starts/), '2026-10-01');
     await user.type(screen.getByLabelText(/Monthly vehicle rate/), '200.29');
     await user.type(screen.getByLabelText(/Reason for this change/), 'Initial monthly rate');
@@ -80,43 +80,6 @@ describe('vehicle-owned monthly parking', () => {
     expect((await vehiclesApi.get(id)).parking?.rate_history).toHaveLength(2);
   });
 
-  it('offers standard and oversize pools with size-appropriate compact-car compatibility', async () => {
-    const pools = await vehiclesApi.pools();
-    expect(pools.map(({ label }) => label)).toEqual(['Standard', 'Oversize']);
-    expect(pools[0]?.allowed_vehicle_types).toContain('compact');
-    expect(pools[1]?.allowed_vehicle_types).not.toContain('compact');
-
-    const compact = await vehiclesApi.create({
-      customer_id: customerId,
-      vehicle_type: 'compact',
-      unit_number: null,
-      usdot_number: null,
-      plate_number: 'CMP 1001',
-      plate_jurisdiction: 'CA',
-    });
-    await expect(
-      vehiclesApi.saveParking(compact.id, compact.version, {
-        ...setup,
-        pool_id: 'mock-standard',
-      }),
-    ).resolves.toMatchObject({ parking: { pool_label: 'Standard' } });
-
-    const secondCompact = await vehiclesApi.create({
-      customer_id: customerId,
-      vehicle_type: 'compact',
-      unit_number: null,
-      usdot_number: null,
-      plate_number: 'CMP 1002',
-      plate_jurisdiction: 'CA',
-    });
-    await expect(
-      vehiclesApi.saveParking(secondCompact.id, secondCompact.version, {
-        ...setup,
-        pool_id: 'mock-oversize',
-      }),
-    ).rejects.toMatchObject({ status: 409, code: 'INVALID_PARKING' });
-  });
-
   it('rejects stale writes and unauthorized changes to an existing rate', async () => {
     const vehicle = await vehiclesApi.saveParking(id, 1, setup);
     await expect(vehiclesApi.saveParking(id, 1, setup)).rejects.toMatchObject({ status: 412 });
@@ -128,40 +91,20 @@ describe('vehicle-owned monthly parking', () => {
     ).rejects.toMatchObject({ status: 403 });
   });
 
-  it('copies customer defaults without retroactively changing existing parking', async () => {
-    const customer = await customersApi.get(customerId);
-    const changed = await customersApi.update(customer.id, customer.version, {
-      billing_anchor_day: 15,
-      payment_terms: 'Pay by transfer',
-    });
-    await vehiclesApi.saveParking(id, 1, setup);
-    await customersApi.update(customer.id, changed.version, {
-      billing_anchor_day: 20,
-      payment_terms: 'New terms',
-    });
-    expect((await vehiclesApi.get(id)).parking).toMatchObject({
-      billing_anchor_day: 15,
-      payment_terms: 'Pay by transfer',
-    });
-  });
-
-  it('counts capacity by vehicle and rejects an eleventh concurrent parking setup', async () => {
-    for (let index = 0; index < 10; index += 1) {
+  it('allows parking for any vehicle type without a capacity limit', async () => {
+    let lastVehicle: Vehicle | undefined;
+    for (let index = 0; index < 11; index += 1) {
       const vehicle = await vehiclesApi.create({
         customer_id: customerId,
-        vehicle_type: 'truck',
+        vehicle_type: index === 10 ? 'compact' : 'truck',
         unit_number: `parking-${index}`,
-        usdot_number: '1234567',
-        plate_number: null,
-        plate_jurisdiction: null,
+        usdot_number: null,
+        plate_number: `PKG ${index + 1}`,
+        plate_jurisdiction: 'CA',
       });
-      await vehiclesApi.saveParking(vehicle.id, vehicle.version, setup);
+      lastVehicle = await vehiclesApi.saveParking(vehicle.id, vehicle.version, setup);
     }
-    await expect(vehiclesApi.saveParking(id, 1, setup)).rejects.toMatchObject({
-      status: 409,
-      code: 'CAPACITY_UNAVAILABLE',
-    });
-    expect((await vehiclesApi.get(id)).parking).toBeNull();
+    expect(lastVehicle?.parking).toMatchObject({ starts_on: '2026-10-01' });
   });
 
   it('requires service to end before archiving and preserves price history', async () => {
@@ -201,8 +144,6 @@ describe('vehicle-owned monthly parking', () => {
     const user = userEvent.setup();
     renderApp({ route: `/vehicles/${id}/edit` });
     await screen.findByRole('heading', { name: 'Monthly parking' });
-    await user.click(screen.getByRole('combobox', { name: 'Capacity category' }));
-    await user.click(await screen.findByRole('option', { name: 'Standard' }));
     await user.type(screen.getByLabelText(/Billing starts/), '2026-10-01');
     await user.type(screen.getByLabelText(/Monthly vehicle rate/), '200');
     await user.type(screen.getByLabelText(/Reason for this change/), 'Initial rate');

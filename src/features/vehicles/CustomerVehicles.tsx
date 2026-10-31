@@ -40,10 +40,22 @@ export function CustomerVehicles({ customerId }: { customerId: string }) {
         <Typography component="h2" variant="h6" fontWeight={600}>
           {t('customers.sections.vehicles')}
         </Typography>
-        <Button component={RouterLink} to={addLink} startIcon={<AddIcon />} variant="outlined">
+        <Button
+          component={RouterLink}
+          to={addLink}
+          startIcon={<AddIcon />}
+          variant="outlined"
+          sx={{ minHeight: 48 }}
+        >
           {t('vehicles.add')}
         </Button>
       </Box>
+
+      {list.data && !list.isError && (
+        <Typography color="text.secondary" sx={{ mb: 2 }}>
+          {t('vehicles.onCustomer.total', { count: list.data.total })}
+        </Typography>
+      )}
 
       {list.isPending && <LoadingState label={t('app.loading')} />}
 

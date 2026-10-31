@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
-import { VEHICLE_TYPES, type Vehicle, type VehicleType, type VehicleWrite } from './types';
+import { businessDate, parkingToWrite, rateSchema } from './parkingModel';
+import {
+  VEHICLE_TYPES,
+  type Vehicle,
+  type VehicleCreateWrite,
+  type VehicleType,
+  type VehicleWrite,
+} from './types';
 
 // "method" only controls which fields are shown first. It is never sent to the server.
 export type IdentifyMethod = 'usdot' | 'plate';
@@ -17,6 +24,8 @@ export const vehicleFormSchema = z
     unit_number: text(50),
     plate_number: text(20),
     plate_jurisdiction: text(20),
+    monthly_rate: z.string().trim().optional(),
+    parking_starts_on: z.string().optional(),
   })
   .superRefine((v, ctx) => {
     const issue = (path: keyof typeof v, message: string) =>
@@ -26,6 +35,13 @@ export const vehicleFormSchema = z
     const unit = v.unit_number?.trim() ?? '';
     const plate = v.plate_number?.trim() ?? '';
     const state = v.plate_jurisdiction?.trim() ?? '';
+
+    if (v.monthly_rate) {
+      if (!rateSchema.safeParse(v.monthly_rate).success)
+        issue('monthly_rate', 'parking.invalidRate');
+      if (!businessDate.safeParse(v.parking_starts_on).success)
+        issue('parking_starts_on', 'parking.invalidDate');
+    }
 
     if (usdot && !/^\d{1,8}$/.test(usdot)) issue('usdot_number', 'vehicles.errors.usdotDigits');
 
@@ -60,6 +76,8 @@ export function emptyVehicleForm(
     unit_number: '',
     plate_number: '',
     plate_jurisdiction: '',
+    monthly_rate: '',
+    parking_starts_on: '',
   };
 }
 
@@ -90,6 +108,24 @@ export function formToWrite(values: VehicleFormValues): VehicleWrite {
     // States and provinces are written in capitals.
     plate_jurisdiction: blankToNull(values.plate_jurisdiction)?.toUpperCase() ?? null,
     usdot_number: blankToNull(values.usdot_number),
+  };
+}
+
+export function formToCreate(values: VehicleFormValues): VehicleCreateWrite {
+  const parsed = vehicleFormSchema.parse(values);
+  return {
+    ...formToWrite(parsed),
+    ...(parsed.monthly_rate
+      ? {
+          parking: parkingToWrite({
+            rate: parsed.monthly_rate,
+            starts_on: parsed.parking_starts_on ?? '',
+            effective_on: parsed.parking_starts_on ?? '',
+            ends_on: '',
+            reason: 'Initial monthly parking',
+          }),
+        }
+      : {}),
   };
 }
 

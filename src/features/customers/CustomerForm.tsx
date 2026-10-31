@@ -50,8 +50,6 @@ const MORE_DETAIL_FIELDS: ReadonlySet<string> = new Set([
   'state',
   'postal_code',
   'notes',
-  'billing_anchor_day',
-  'payment_terms',
 ]);
 
 const KNOWN_FIELDS: ReadonlySet<string> = new Set<FieldPath<CustomerFormValues>>([
@@ -67,8 +65,6 @@ const KNOWN_FIELDS: ReadonlySet<string> = new Set<FieldPath<CustomerFormValues>>
   'state',
   'postal_code',
   'notes',
-  'billing_anchor_day',
-  'payment_terms',
 ]);
 
 export function CustomerForm({
@@ -296,25 +292,6 @@ export function CustomerForm({
           </AccordionSummary>
           <AccordionDetails>
             <Stack spacing={2}>
-              <Typography component="h2" variant="subtitle1" fontWeight={600}>
-                {t('parking.customerDefaults')}
-              </Typography>
-              <TextField
-                label={t('parking.anchor')}
-                type="number"
-                required
-                fullWidth
-                {...register('billing_anchor_day')}
-                error={Boolean(errors.billing_anchor_day)}
-                helperText={fieldError('billing_anchor_day') ?? t('parking.defaultsHint')}
-              />
-              <TextField
-                label={t('parking.paymentTerms')}
-                fullWidth
-                {...register('payment_terms')}
-                error={Boolean(errors.payment_terms)}
-                helperText={fieldError('payment_terms') ?? t('parking.defaultTerms')}
-              />
               <Typography component="h2" variant="subtitle1" fontWeight={600}>
                 {t('customers.fields.address')}
               </Typography>

@@ -1,10 +1,13 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HttpResponse, http } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { server } from '@/mocks/server';
 import { renderApp } from '@/test/renderApp';
+import { vehiclesApi } from './api';
+import { formToCreate, emptyVehicleForm } from './formModel';
+import { mockVehicles } from '@/mocks/vehicleHandlers';
 
 const BASE = '/api/v1';
 
@@ -31,6 +34,21 @@ function signedIn() {
 const YUANHANG = 'c0000001-0000-4000-8000-000000000001';
 const PACIFIC = 'c0000001-0000-4000-8000-000000000002';
 const UNIT_14 = 'v0000001-0000-4000-8000-000000000002';
+
+function useViewport(width: number) {
+  vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+    matches: query.includes('max-width')
+      ? width <= Number(/max-width:\s*([\d.]+)/.exec(query)?.[1] ?? 0)
+      : width >= Number(/min-width:\s*([\d.]+)/.exec(query)?.[1] ?? Infinity),
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }));
+}
 
 describe('vehicles list', () => {
   it('lists active vehicles and hides inactive ones by default', async () => {
@@ -98,9 +116,124 @@ describe('vehicles list', () => {
     await user.type(await screen.findByRole('searchbox', { name: 'Search vehicles' }), 'zzzzzz');
     expect(await screen.findByText('No vehicles match')).toBeInTheDocument();
   });
+
+  it('uses the customer-style table breakpoint and a dedicated monthly-rate column', async () => {
+    signedIn();
+    useViewport(1000);
+    renderApp({ route: '/vehicles' });
+
+    const table = await screen.findByRole('table', { name: 'Vehicles' });
+    expect(within(table).getByRole('columnheader', { name: 'Current monthly rate' })).toHaveStyle({
+      textAlign: 'center',
+    });
+    expect(screen.getByRole('link', { name: 'Add vehicle' })).toBeInTheDocument();
+    const row = within(table).getByRole('link', { name: 'Unit 14' }).closest('tr')!;
+    expect(within(row).getByRole('cell', { name: 'Not set up' })).toHaveStyle({
+      textAlign: 'center',
+    });
+  });
+
+  it('keeps mobile cards compact with separate vehicle and owner links', async () => {
+    signedIn();
+    useViewport(390);
+    const user = userEvent.setup();
+    renderApp({ route: '/vehicles?q=1234567' });
+
+    const vehicleLink = await screen.findByRole('link', { name: 'Unit 14' });
+    const card = vehicleLink.closest('li')!;
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Unit number, plate, USDOT number, or customer name'),
+    ).not.toBeInTheDocument();
+    expect(vehicleLink).toHaveAttribute(
+      'href',
+      `/vehicles/${UNIT_14}/edit?returnTo=${encodeURIComponent('/vehicles?q=1234567')}`,
+    );
+    expect(vehicleLink).toHaveStyle({ position: 'absolute' });
+    expect(within(card).getByRole('link', { name: '远航货运有限公司' })).toHaveAttribute(
+      'href',
+      `/customers/${YUANHANG}`,
+    );
+    expect(within(card).getByText('Current monthly rate:')).toBeInTheDocument();
+    expect(screen.getAllByText('2 results')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: 'Add vehicle' })).toBeInTheDocument();
+    await user.click(vehicleLink);
+    expect(await screen.findByRole('heading', { name: 'Unit 14', level: 1 })).toBeInTheDocument();
+  });
+
+  it('keeps mobile inactive filtering and empty results available', async () => {
+    signedIn();
+    useViewport(390);
+    const user = userEvent.setup();
+    renderApp({ route: '/vehicles' });
+
+    await screen.findByRole('link', { name: 'Unit 14' });
+    await user.click(screen.getByRole('checkbox', { name: 'Show inactive vehicles' }));
+    expect(await screen.findByRole('link', { name: 'OLD 1234' })).toBeInTheDocument();
+    await user.type(screen.getByRole('searchbox', { name: 'Search vehicles' }), 'zzzzzz');
+    expect(await screen.findByText('No vehicles match')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Show inactive vehicles' })).toBeChecked();
+    expect(screen.getByRole('link', { name: 'Add vehicle' })).toBeInTheDocument();
+  });
 });
 
 describe('vehicle create', () => {
+  it('saves the monthly amount with the vehicle and shows it on the customer page', async () => {
+    signedIn();
+    server.use(
+      http.get(`${BASE}/invoices`, () =>
+        HttpResponse.json({ items: [], page: 1, page_size: 100, total: 0 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp({
+      route: `/vehicles/new?customer_id=${PACIFIC}&returnTo=${encodeURIComponent(`/customers/${PACIFIC}`)}`,
+    });
+    await screen.findByRole('heading', { name: 'Add vehicle', level: 1 });
+    await user.type(screen.getByLabelText(/^Unit number/), '21');
+    await user.type(screen.getByLabelText(/^Monthly vehicle rate/), '325.50');
+    await user.type(screen.getByLabelText(/^Billing starts/), '2026-10-01');
+    await user.click(screen.getByRole('button', { name: 'Add vehicle' }));
+
+    expect(await screen.findByText('Vehicle added.')).toBeInTheDocument();
+    const vehicle = await screen.findByRole('link', { name: 'Unit 21' });
+    expect(within(vehicle.closest('li')!).getByText(/325\.50/)).toBeInTheDocument();
+    expect(screen.getByText('Active vehicles: 2')).toBeInTheDocument();
+    const saved = mockVehicles().find((item) => item.unit_number === '21');
+    expect(saved?.parking?.monthly_rate).toEqual({ amount: 32550, currency: 'USD' });
+    expect(saved?.parking?.rate_history).toHaveLength(1);
+  });
+
+  it('keeps entries and blocks creation until the parking amount and date are valid', async () => {
+    signedIn();
+    const user = userEvent.setup();
+    renderApp({ route: `/vehicles/new?customer_id=${PACIFIC}` });
+    await screen.findByRole('heading', { name: 'Add vehicle', level: 1 });
+    await user.type(screen.getByLabelText(/^Unit number/), '21');
+    const rate = screen.getByLabelText(/^Monthly vehicle rate/);
+    await user.type(rate, '-20');
+    await user.click(screen.getByRole('button', { name: 'Add vehicle' }));
+    expect(
+      await screen.findByText('Enter a USD amount with no more than two decimal places.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Enter a valid date.')).toBeInTheDocument();
+    expect(rate).toHaveValue('-20');
+    expect(mockVehicles().some((item) => item.unit_number === '21')).toBe(false);
+  });
+
+  it('rejects invalid initial parking atomically without creating a vehicle', async () => {
+    const body = formToCreate({
+      ...emptyVehicleForm(PACIFIC, '2345678'),
+      unit_number: '21',
+      monthly_rate: '325.50',
+      parking_starts_on: '2026-10-01',
+    });
+    body.parking!.monthly_rate.amount = -1;
+    const count = mockVehicles().length;
+    await expect(vehiclesApi.create(body)).rejects.toMatchObject({ code: 'INVALID_PARKING' });
+    expect(mockVehicles()).toHaveLength(count);
+  });
+
   it('offers compact car as a vehicle type', async () => {
     signedIn();
     renderApp({ route: `/vehicles/new?customer_id=${PACIFIC}` });
@@ -289,6 +422,23 @@ describe('vehicle create', () => {
 });
 
 describe('vehicle edit', () => {
+  it('uses an identity-first mobile header and customer-style section cards', async () => {
+    signedIn();
+    useViewport(390);
+    renderApp({ route: `/vehicles/${UNIT_14}/edit`, language: 'en' });
+
+    const heading = await screen.findByRole('heading', { name: 'Unit 14', level: 1 });
+    const header = heading.closest('header')!;
+    expect(heading).toHaveStyle({ overflowWrap: 'anywhere', minWidth: '0' });
+    expect(within(header).getByText('Truck · USDOT 1234567')).toBeInTheDocument();
+    expect(within(header).getByText('Active')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Edit vehicle', level: 2 })).toBeInTheDocument();
+    const parking = screen.getByRole('heading', { name: 'Monthly parking', level: 2 });
+    expect(parking.closest('section')).toHaveClass('MuiPaper-outlined');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save monthly parking' })).toBeInTheDocument();
+  });
+
   it('loads existing values, keeps the owner fixed, saves, and returns to the list', async () => {
     signedIn();
     const user = userEvent.setup();
@@ -350,7 +500,7 @@ describe('vehicle edit', () => {
     const user = userEvent.setup();
     renderApp({ route: `/vehicles/${UNIT_14}/edit` });
 
-    await screen.findByRole('heading', { name: 'Edit vehicle', level: 1 });
+    await screen.findByRole('heading', { name: 'Unit 14', level: 1 });
     await user.click(screen.getByRole('button', { name: 'Deactivate vehicle' }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Deactivate' }));

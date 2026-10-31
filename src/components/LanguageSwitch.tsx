@@ -24,7 +24,7 @@ export function LanguageSwitch() {
           key={lang}
           value={lang}
           aria-label={t(`language.${lang}`)}
-          sx={{ px: { xs: 1.25, sm: 2 }, whiteSpace: 'nowrap' }}
+          sx={{ px: { xs: 0.625, sm: 2 }, whiteSpace: 'nowrap' }}
         >
           {t(`language.${lang}`)}
         </ToggleButton>

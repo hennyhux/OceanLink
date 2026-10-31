@@ -83,12 +83,30 @@
   },
   "overview": {
     "title": "概览",
-    "welcome": "您好，{{name}}。",
+    "reportingPeriod": "当前账单余额 · 收款统计本月",
     "emptyTitle": "暂时没有内容",
     "emptyBody": "OceanLink 已经准备就绪。车辆和账单功能会陆续在这里出现。",
     "nextStep": "下一步：先添加客户，再登记他们的车辆和每辆车的月租金。",
     "goToCustomers": "前往客户页面",
     "loadFailed": "无法加载概览数据，未将余额默认显示为零。",
+    "owed": {
+      "total": "客户共欠",
+      "pastDue": "已过期，需要催收",
+      "notYetDue": "还没到期"
+    },
+    "actions": {
+      "recordPayment": "记录收款",
+      "addCustomer": "添加客户"
+    },
+    "balanceDue": {
+      "title": "有应付余额的客户",
+      "customerColumn": "客户",
+      "amountColumn": "应付余额",
+      "viewAll": "查看全部 {{count}} 位",
+      "openAccount": "打开客户账目",
+      "empty": "目前没有应付余额的客户。",
+      "loadFailed": "无法加载有应付余额的客户列表。"
+    },
     "metrics": {
       "overdueInvoices": "逾期账单金额",
       "outstandingInvoices": "未付账单余额",
@@ -131,7 +149,7 @@
     "reloadFailed": "无法加载最新内容，您填写的内容已保留。请检查网络后重试。",
     "problemNumber": "问题编号：{{id}}",
     "status": {
-      "active": "启用中",
+      "active": "已启用",
       "inactive": "已停用"
     },
     "moreDetails": "更多信息",
@@ -144,9 +162,12 @@
     "newTitle": "添加客户",
     "editTitle": "编辑客户",
     "selected": "当前客户",
+    "showContactDetails": "更多联系方式",
+    "hideContactDetails": "收起联系方式",
     "searchLabel": "搜索客户",
     "searchHint": "客户名称、联系人、电话、邮箱或 USDOT 号码",
-    "showInactive": "显示已停用的客户",
+    "showInactive": "显示停用客户",
+    "showOverdue": "显示逾期客户",
     "emptyTitle": "还没有客户",
     "emptyBody": "先添加第一位客户，再登记车辆和每辆车的月租金。",
     "noResultsTitle": "没有找到匹配的客户",
@@ -311,16 +332,17 @@
     "inactiveBanner": "这辆车已停用，默认不在车辆列表中显示。",
     "ownerNote": "这里不能更改车辆所属的客户。",
     "onCustomer": {
+      "total": "在用车辆：{{count}}",
       "empty": "这位客户还没有登记车辆。"
     }
   },
   "parking": {
     "title": "车辆月租",
+    "createHint": "留空可稍后设置月租。免费停车请填写0。",
     "rate": "这辆车的月租金（美元）",
     "currentRate": "当前月租金",
-    "category": "车位类别",
-    "choose": "请选择",
     "starts": "开始计费日期",
+    "cycleHint": "每个完整月租周期从此日期开始，并按月重复。",
     "ends": "结束服务日期（选填）",
     "endHint": "填写第一天不再提供停车服务的日期。例如停到10月31日，应填写11月1日。",
     "effective": "租金生效日期",
@@ -332,16 +354,9 @@
     "noSetup": "这辆车还没有设置月租。",
     "notConfigured": "尚未设置",
     "openEnded": "未设结束日期",
-    "anchor": "每月账单日（1至31）",
-    "paymentTerms": "默认付款约定",
-    "customerDefaults": "默认计费设置",
-    "defaultsHint": "只用于以后新设置的车辆月租，已有租金、日期和账单不会改变。",
-    "defaultTerms": "留空表示在服务账期开始时付款。",
-    "inherit": "使用这位客户的账单日：每月{{day}}日。",
     "noDebt": "月租金不等于欠款，只有已开账单和实际收款会影响客户余额。",
     "adminOnly": "已有月租金或结束服务日期需要由管理员修改。",
     "stale": "这辆车的记录已被其他人修改。请刷新核对最新内容后再保存。",
-    "noCapacity": "整个租期内没有足够的对应类别空位。",
     "invalidFuture": "请选择未来日期，且应晚于上次安排的租金调整。历史记录不能覆盖。",
     "saveFailed": "暂时无法确认保存结果，您填写的内容已保留。再次操作前请先核对车辆记录。",
     "required": "请填写此项。",
@@ -350,7 +365,6 @@
     "invalidRate": "请填写美元金额，最多两位小数。",
     "invalidEnd": "结束日期必须晚于开始日期。",
     "invalidEffective": "租金生效日期必须在服务期间内。",
-    "invalidAnchor": "请填写1至31之间的整数。",
     "confirmEnd": "确认修改服务日期",
     "endReview": "修改结束日期会改变停车权益，但不会消除已有欠款。请先核对已开账单，并另行处理抵扣或退款。",
     "endBeforeArchive": "请先结束这辆车的月租服务，再停用车辆。历史记录和欠款都会保留。"
@@ -360,15 +374,23 @@
     "searchShort": "客户名称或收款编号",
     "referenceSearch": "搜索收款编号",
     "filters": "筛选",
+    "searchAndFilters": "搜索和筛选",
+    "activeFilters": "当前筛选条件",
     "applyFilters": "应用筛选",
     "clearFilters": "清除筛选",
     "dateColumn": "收款日期",
     "amountColumn": "金额",
     "receiptColumn": "收款详情",
     "title": "收款记录",
-    "customerHistory": "这位客户的收款记录",
+    "customerHistory": "交易记录",
+    "noTransactions": "没有找到符合条件的交易记录。",
     "record": "记录收款",
     "recordShort": "收款",
+    "reviewTitle": "核对收款信息",
+    "review": "核对收款",
+    "backToEdit": "返回修改",
+    "confirmRecord": "确认并记录收款",
+    "recordReviewWarning": "请仔细核对客户、金额、日期和收款方式。只有管理员可以撤销已记录的收款。",
     "customer": "付款客户",
     "customerHint": "请选择实际付款的客户。已停用的客户仍可以支付原有欠款。",
     "amount": "实际收到的金额（美元）",
@@ -439,7 +461,28 @@
     "reviewHint": "账期开始时收取费用，结束日期当天不计费。确认后增加应付账单，不会重复记录收款。",
     "uncertain": "暂时无法确认结果。再次操作前请先检查，系统会复用原请求，避免重复开账单。",
     "changed": "车辆月租、余额或账单已发生变化。请刷新并重新核对后再开账单。",
-    "failed": "暂时无法开账单，请核对预览后重试。"
+    "failed": "暂时无法开账单，请核对预览后重试。",
+    "manualAction": "添加一次性费用",
+    "manualHistoryTitle": "一次性调整",
+    "manualStatusIssued": "已开具",
+    "manualTitle": "添加客户应付费用",
+    "manualReviewTitle": "核对一次性费用",
+    "manualInfo": "为这位客户添加一笔独立账单费用，不会登记收款或实际收钱。",
+    "manualDescription": "费用说明",
+    "manualAmount": "金额（美元）",
+    "manualDueDate": "到期日",
+    "manualReviewWarning": "请核对说明、金额和到期日。开具后会增加客户应付余额，但不会登记收款。",
+    "manualBack": "返回修改",
+    "manualReview": "核对费用",
+    "manualConfirm": "开具费用",
+    "manualCheckResult": "核对开具结果",
+    "manualUncertain": "暂时无法确认开具结果。请核对同一张账单，系统会安全复用原请求；不要重复添加费用。",
+    "manualFailed": "暂时无法开具这笔费用，请核对信息后重试。",
+    "manualDescriptionRequired": "请填写费用说明。",
+    "manualDescriptionLong": "费用说明请控制在200字以内。",
+    "manualAmountInvalid": "请填写大于零的金额，最多两位小数。",
+    "manualDueDateRequired": "请选择有效的到期日。",
+    "manualIssued": "账单 {{number}} 已开具，金额为 {{amount}}，客户应付余额已更新。"
   },
   "account": {
     "creditBalance": "客户可抵扣余额",
@@ -467,6 +510,6 @@
     }
   },
   "dev": {
-    "mockBanner": "开发模拟模式。这里的数据和服务器都不是真实的。"
+    "mockBanner": "演示数据 · 刷新后重置"
   }
 }

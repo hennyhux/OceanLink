@@ -26,8 +26,8 @@ Persistent project memory. Read before making changes; update when decisions cha
 | Customer                | A person or business that pays for parking. Not the same as an app user.                                                                                        |
 | Vehicle                 | A truck, trailer, or attached combination. Linked to its customer by plate + jurisdiction, by USDOT number, or both.                                            |
 | USDOT number            | Identifies a motor carrier (the company), not one truck. A vehicle linked only by USDOT needs a unit number.                                                    |
-| Vehicle monthly parking | Monthly price, capacity category, service dates and effective-dated rate history belong to each vehicle. Customer billing defaults are copied on initial setup. |
-| Capacity category       | A kind of space (for example standard, long, oversize). Monthly parking is sold by category, not by numbered bay.                                               |
+| Vehicle monthly parking | Monthly price, service dates and effective-dated rate history belong to each vehicle. Monthly periods start on the vehicle's service start date and recur monthly. No customer billing defaults are used. |
+| Capacity category       | A kind of physical space used for spot allocation or future reservations, not monthly vehicle parking.                                                             |
 | Spot                    | A physical parking space. Occupancy is derived, not stored.                                                                                                     |
 | Invoice                 | A billing document: draft, issued, or void. Paid and overdue are derived.                                                                                       |
 | Credit note vs refund   | A credit note reduces charges. A refund returns money. They are separate events.                                                                                |
@@ -72,6 +72,7 @@ Persistent project memory. Read before making changes; update when decisions cha
 - **Config:** Every `VITE_` value is public. Never put secrets or customer data in it. `VITE_API_BASE_URL` points at the same-origin `/api` path.
 - **Dependencies:** Pin versions. No unbounded `latest`.
 - **Testing:** Unit/component tests colocated as `*.test.tsx`; E2E in `e2e/`. Use synthetic data only.
+- **Logic-change tracking:** For every behavior, business-rule, or API-contract change, append a dated backend-facing entry to [BACKEND_LOGIC_CHANGES.md](BACKEND_LOGIC_CHANGES.md) and summarize the decision in this file's Change Log.
 - **Git:** Short-lived branches, conventional commit messages, PRs require passing CI. Do not deploy from a PR.
 
 ## Environments
@@ -92,7 +93,9 @@ One production environment for now. A permanent staging environment is required 
 - Mutable resources carry a `version`. Stale writes return `412`.
 - Financial and check-in/out writes need an `Idempotency-Key`. A timeout is an unknown result, not a failure.
 - Invoices, payments, and other financial records are never hard-deleted. Corrections use voids, credit notes, and reversals.
-- `GET /customers` list items include `net_balance: { amount, currency }` and `truck_count`. The balance is outstanding invoices minus unapplied credit; the count includes active trucks and combinations, not standalone trailers. The mock enriches each paged response; production should compute these in the backend to avoid per-row requests.
+- `POST /vehicles/{id}/parking` does not use capacity pools or vehicle categories; monthly parking requests/responses omit `pool_id` and `pool_label`, and saves do not calculate capacity or return `CAPACITY_UNAVAILABLE`.
+- Customer records and monthly parking omit billing-anchor and default-payment-term fields. Monthly charge periods anchor to each vehicle's `starts_on` date.
+- `GET /customers` list items include `net_balance: { amount, currency }`, `overdue_balance: { amount, currency }`, and `truck_count`; `overdue_only=true` filters to confirmed overdue accounts before pagination. Net balance is outstanding invoices minus unapplied credit; overdue is a subset of open invoices. The count includes active trucks and combinations, not standalone trailers. Production should compute these in the backend to avoid per-row requests.
 
 ## Current Status
 
@@ -110,12 +113,17 @@ One production environment for now. A permanent staging environment is required 
 
 ## Known Inconsistencies
 
+- REQUIREMENTS.md section 4.4 says balance values stay neutral unless an overdue amount exists, and that mobile customer cards show a truck count. The owner has since decided that any positive amount owed is red and that truck counts move to the customer's Vehicles section. See [UX_REBUILD.md](UX_REBUILD.md) section 1.2.
 - REQUIREMENTS.md section 16.1 requires AWS CDK and separate `dev`, `staging`, and `prod` environments. DEPLOYMENT.md has one `prod` environment and defers infrastructure as code.
 - REQUIREMENTS.md section 16.4 says back up at least hourly. DEPLOYMENT.md says every 30 minutes with tiered retention. These do not conflict, but REQUIREMENTS.md should point to DEPLOYMENT.md.
 - REQUIREMENTS.md sets the API base path to `/api/v1`. DEPLOYMENT.md sets `VITE_API_BASE_URL=/api`. Pick one place for the `/v1` segment.
 
 ## Change Log
 
+- 2026-10-31: Planned a from-scratch frontend UX rebuild focused on readability (blue sidebar shell, large titles, grouped form cards, 16px base text, checked color contrast). Directions, screen specs, and build order are in [UX_REBUILD.md](UX_REBUILD.md). No backend contract change.
+- 2026-10-24: Matched vehicle list and edit-screen presentation to customer screens, including mobile cards/search, desktop table headings and monthly-rate column, identity-first header, and outlined parking card. No backend contract change. See [BACKEND_LOGIC_CHANGES.md](BACKEND_LOGIC_CHANGES.md).
+- 2026-10-24: Removed capacity-pool selection, vehicle-type compatibility, and interval-capacity enforcement from monthly parking. See [BACKEND_LOGIC_CHANGES.md](BACKEND_LOGIC_CHANGES.md) for backend contract details.
+- 2026-10-24: Removed customer billing-day/payment-term defaults. Monthly charges now start on each vehicle's service start date and recur monthly on that day (clamped to month-end when needed). See [BACKEND_LOGIC_CHANGES.md](BACKEND_LOGIC_CHANGES.md).
 - 2026-10-20: Created requirements and global context files.
 - 2026-10-20: Split the project into 3 MVPs. MVP 1 is login, dashboard reporting, and add/delete users.
 - 2026-10-20: Limited scope to one lot, SQLite, FastAPI, and React. Multi-lot features are marked Deferred.

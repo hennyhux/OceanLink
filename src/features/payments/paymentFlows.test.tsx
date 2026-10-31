@@ -104,7 +104,7 @@ describe('staff payment workflows', () => {
     await user.click(await screen.findByRole('button', { name: 'Record payment' }));
     const dialog = await screen.findByRole('dialog', { name: 'Record payment' });
     expect(await within(dialog).findByText(/You are offline/)).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Record payment' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'Review payment' })).toBeDisabled();
   });
 
   it('prevents a second submission while the first receipt is pending', async () => {
@@ -128,7 +128,8 @@ describe('staff payment workflows', () => {
     await user.click(await screen.findByRole('button', { name: 'Record payment' }));
     const dialog = await screen.findByRole('dialog', { name: 'Record payment' });
     await user.type(within(dialog).getByLabelText(/Amount received/), '100');
-    await user.click(within(dialog).getByRole('button', { name: 'Record payment' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Review payment' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm and record' }));
     const pending = within(dialog).getByRole('button', { name: 'Saving…' });
     expect(pending).toBeDisabled();
     fireEvent.click(pending);
@@ -136,17 +137,26 @@ describe('staff payment workflows', () => {
     expect(calls).toBe(1);
   });
 
-  it('records a payment from the customer page and refreshes balance and last payment', async () => {
-    await signIn();
+  it('reviews a payment before staff records it and refreshes balance and last payment', async () => {
+    await signIn('operator');
     const user = userEvent.setup();
-    renderApp({ route: `/customers/${customerId}` });
+    const { queryClient } = renderApp({ route: `/customers/${customerId}` });
+    queryClient.setQueryData(['overview', 'metrics'], {});
+    queryClient.setQueryData(['customers', 'list', {}], {});
     await user.click(await screen.findByRole('button', { name: 'Record payment' }));
     const dialog = await screen.findByRole('dialog', { name: 'Record payment' });
     await user.type(within(dialog).getByLabelText(/Amount received/), '300.29');
     await user.type(within(dialog).getByLabelText(/Reference/), 'CASH-1');
-    await user.click(within(dialog).getByRole('button', { name: 'Record payment' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Review payment' }));
+    expect(within(dialog).getByText('CASH-1')).toBeInTheDocument();
+    expect(within(dialog).getByText('300.29', { exact: false })).toBeInTheDocument();
+    expect(within(dialog).getByText(/Only an administrator can reverse/)).toBeInTheDocument();
+    expect((await paymentsApi.list({ customer_id: customerId })).total).toBe(0);
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm and record' }));
     expect(await screen.findByText('Payment recorded.')).toBeInTheDocument();
     expect((await screen.findByText('Customer credit')).parentElement).toHaveTextContent('$300.29');
+    expect(queryClient.getQueryState(['overview', 'metrics'])?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(['customers', 'list', {}])?.isInvalidated).toBe(true);
     expect(screen.getByText('Last payment received').parentElement).toHaveTextContent('Cash');
     expect((await paymentsApi.list({ customer_id: customerId })).total).toBe(1);
   });
@@ -158,7 +168,7 @@ describe('staff payment workflows', () => {
     await user.click(await screen.findByRole('button', { name: 'Record payment' }));
     const dialog = await screen.findByRole('dialog', { name: 'Record payment' });
     await user.type(within(dialog).getByLabelText(/Amount received/), '0');
-    await user.click(within(dialog).getByRole('button', { name: 'Record payment' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Review payment' }));
     expect(await screen.findByText('Please choose the customer who paid.')).toBeInTheDocument();
     expect(screen.getByText(/Enter an amount greater than zero/)).toBeInTheDocument();
     expect(within(dialog).getByLabelText(/Amount received/)).toHaveValue('0');
@@ -192,7 +202,8 @@ describe('staff payment workflows', () => {
     await user.click(await screen.findByRole('button', { name: 'Record payment' }));
     const dialog = await screen.findByRole('dialog', { name: 'Record payment' });
     await user.type(within(dialog).getByLabelText(/Amount received/), '300');
-    await user.click(within(dialog).getByRole('button', { name: 'Record payment' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Review payment' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm and record' }));
     expect(await screen.findByText(/The result is not confirmed yet/)).toBeInTheDocument();
     expect(within(dialog).getByLabelText(/Amount received/)).toHaveAttribute('readonly');
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled();
@@ -243,7 +254,8 @@ describe('staff payment workflows', () => {
     await user.click(await screen.findByRole('button', { name: '记录收款' }));
     const dialog = await screen.findByRole('dialog', { name: '记录收款' });
     await user.type(within(dialog).getByLabelText(/实际收到的金额/), '50');
-    await user.click(within(dialog).getByRole('button', { name: '记录收款' }));
+    await user.click(within(dialog).getByRole('button', { name: '核对收款' }));
+    await user.click(within(dialog).getByRole('button', { name: '确认并记录收款' }));
     await screen.findByText('收款已记录。');
     const history = screen.getAllByRole('button', { name: '查看收款详情' });
     await user.click(history[0]!);

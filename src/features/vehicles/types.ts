@@ -1,7 +1,7 @@
 // Vehicle shapes follow REQUIREMENTS.md sections 7.1 and 10. The backend OpenAPI schema is the
 // source of truth once it exists; field names here are the proposed wire names.
 
-import type { VehicleParking } from './parkingModel';
+import type { VehicleParking, VehicleParkingWrite } from './parkingModel';
 
 export const VEHICLE_TYPES = ['truck', 'trailer', 'combination', 'compact'] as const;
 
@@ -33,6 +33,10 @@ export interface VehicleWrite {
   plate_number: string | null;
   plate_jurisdiction: string | null;
   usdot_number: string | null;
+}
+
+export interface VehicleCreateWrite extends VehicleWrite {
+  parking?: VehicleParkingWrite;
 }
 
 export interface VehicleListParams {

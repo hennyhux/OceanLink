@@ -25,18 +25,15 @@ export interface Customer {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  billing_anchor_day?: number;
-  payment_terms?: string;
 }
 
 export interface CustomerListItem extends Customer {
   net_balance: Money;
+  overdue_balance: Money;
   truck_count: number;
 }
 
 export interface CustomerWrite {
-  billing_anchor_day?: number;
-  payment_terms?: string;
   type: CustomerType;
   display_name: string;
   contact_name: string | null;
@@ -55,6 +52,8 @@ export interface CustomerListParams {
   q?: string;
   // Omit to get active customers only.
   include_inactive?: boolean;
+  // Restrict results to customers with a positive overdue invoice balance.
+  overdue_only?: boolean;
   page?: number;
   page_size?: number;
 }

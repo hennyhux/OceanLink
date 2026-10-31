@@ -1,22 +1,10 @@
 import { z } from 'zod';
 import type { Money } from '@/lib/money';
-import type { VehicleType } from './types';
-
-export interface CapacityPool {
-  id: string;
-  label: string;
-  capacity: number;
-  allowed_vehicle_types: VehicleType[];
-}
 
 export interface VehicleParking {
-  pool_id: string;
-  pool_label: string;
   starts_on: string;
   ends_on: string | null;
   monthly_rate: Money;
-  billing_anchor_day: number;
-  payment_terms: string;
   rate_history: { effective_on: string; monthly_rate: Money; reason: string }[];
 }
 
@@ -38,7 +26,6 @@ export function cents(value: string): number {
 
 export const parkingSchema = z
   .object({
-    pool_id: z.string().min(1, 'parking.required'),
     starts_on: businessDate,
     ends_on: z.union([z.literal(''), businessDate]),
     rate: rateSchema,

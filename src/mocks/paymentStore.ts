@@ -3,6 +3,7 @@ import type { Payment, PaymentWrite } from '@/features/payments/model';
 import { findMockCustomer } from './customerHandlers';
 import {
   parkingInvoices,
+  issuedManualDebits,
   unbilledParking,
   resetMockBilling,
   type ParkingInvoice,
@@ -155,13 +156,15 @@ export function mockCustomerLedger(customerId: string): CustomerLedger {
   const credit = valid.reduce((sum, payment) => sum + payment.available_credit.amount, 0);
   const invoices = parkingInvoices(customerId);
   const issuedTotal = invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
+  const manualInvoices = issuedManualDebits(customerId);
+  const manualTotal = manualInvoices.reduce((sum, invoice) => sum + invoice.total.amount, 0);
   const newAllocated = invoices
     .flatMap((invoice) => invoice.allocations)
     .filter((allocation) => valid.some((payment) => payment.id === allocation.payment_id))
     .reduce((sum, allocation) => sum + allocation.amount, 0);
   const outstanding = Math.max(
     0,
-    (customerId === demoCustomerId ? 45000 : 0) + issuedTotal - allocated,
+    (customerId === demoCustomerId ? 45000 : 0) + issuedTotal + manualTotal - allocated,
   );
   const today = todayInTimeZone('UTC');
   const overdue =
@@ -181,7 +184,10 @@ export function mockCustomerLedger(customerId: string): CustomerLedger {
                 .reduce((paid, allocation) => paid + allocation.amount, 0),
           ),
         0,
-      );
+      ) +
+    manualInvoices
+      .filter((invoice) => invoice.due_on < today)
+      .reduce((sum, invoice) => sum + invoice.total.amount, 0);
   const monthlyTotal = mockVehicles()
     .filter(
       (vehicle) =>

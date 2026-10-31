@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { businessDate, cents, parkingSchema, parkingToWrite } from './parkingModel';
 
 const setup = {
-  pool_id: 'standard',
   starts_on: '2026-10-01',
   ends_on: '',
   rate: '200.29',
