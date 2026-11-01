@@ -1,390 +1,213 @@
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import ContactPhoneOutlinedIcon from '@mui/icons-material/ContactPhoneOutlined';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogContentText from '@mui/material/DialogContentText';
-import DialogTitle from '@mui/material/DialogTitle';
-import Collapse from '@mui/material/Collapse';
 import Grid from '@mui/material/Grid';
-import IconButton from '@mui/material/IconButton';
 import Link from '@mui/material/Link';
-import Paper from '@mui/material/Paper';
-import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
-import Tooltip from '@mui/material/Tooltip';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { useState, type ReactNode } from 'react';
+import Tab from '@mui/material/Tab';
+import Tabs from '@mui/material/Tabs';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link as RouterLink, useNavigate, useParams } from 'react-router';
+import { Link as RouterLink, useParams, useSearchParams } from 'react-router';
 
-import { ActiveStatusChip } from '@/components/ActiveStatusChip';
-import { ErrorState } from '@/components/ErrorState';
-import { FlashMessage } from '@/components/FlashMessage';
-import { LoadingState } from '@/components/LoadingState';
-import { CustomerVehicles } from '@/features/vehicles/CustomerVehicles';
-import { CustomerAccount } from '@/features/billing/CustomerAccount';
-import { PaymentsPage } from '@/features/payments/PaymentsPage';
+import { ActiveStatus } from '@/components/ActiveStatus';
+import { useBreadcrumbs } from '@/components/breadcrumbs';
+import { InitialsTile } from '@/components/IconTile';
+import { KeyValueList } from '@/components/KeyValueList';
+import { PageHeader } from '@/components/PageHeader';
+import { SectionCard } from '@/components/SectionCard';
+import { ErrorState, LoadingState } from '@/components/States';
+import { useToast } from '@/components/toastContext';
+import { MonthlyChargesDialog } from '@/features/billing/MonthlyChargesDialog';
+import { OneTimeChargeDialog } from '@/features/billing/OneTimeChargeDialog';
 import { RecordPaymentDialog } from '@/features/payments/RecordPaymentDialog';
-import { isApiError, isNetworkError, isNotFound, isStaleVersion } from '@/lib/api/errors';
+import { useVehicleList } from '@/features/vehicles/api';
+import { hasStatus, requestIdOf } from '@/lib/api/errors';
+import { safeReturnTo, withReturnTo } from '@/lib/navigation';
 
-import { useCustomer, useSetCustomerActive } from './queries';
-import type { Customer } from './types';
+import { useCustomer } from './api';
+import { CustomerAccountCard } from './CustomerAccountCard';
+import { CustomerDetailsTab } from './CustomerDetailsTab';
+import { CustomerTransactionsTab } from './CustomerTransactionsTab';
+import { CustomerVehiclesTab } from './CustomerVehiclesTab';
 
-function Field({ label, value }: { label: string; value: ReactNode }) {
+const TABS = ['vehicles', 'transactions', 'details'] as const;
+type TabName = (typeof TABS)[number];
+type DialogName = 'payment' | 'charge' | 'monthly' | null;
+
+export default function CustomerDetailPage() {
   const { t } = useTranslation();
-  return (
-    <Grid size={{ xs: 12, sm: 6 }}>
-      <Typography variant="body2" color="text.secondary" component="dt" sx={{ fontSize: 16 }}>
-        {label}
-      </Typography>
-      <Typography
-        component="dd"
-        sx={{ m: 0, fontSize: 16, lineHeight: 1.5, overflowWrap: 'anywhere' }}
-      >
-        {value || (
-          <span style={{ color: 'inherit', opacity: 0.75 }}>{t('common.notProvided')}</span>
-        )}
-      </Typography>
-    </Grid>
-  );
-}
-
-function formatAddress(customer: Customer): string {
-  const line = [customer.address_line1, customer.address_line2].filter(Boolean).join(', ');
-  const cityLine = [customer.city, customer.state].filter(Boolean).join(', ');
-  return [line, [cityLine, customer.postal_code].filter(Boolean).join(' ')]
-    .filter(Boolean)
-    .join('\n');
-}
-
-function formatDate(iso: string, language: string): string {
-  try {
-    return new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
-}
-
-export function CustomerDetailPage() {
-  const { t, i18n } = useTranslation();
-  const navigate = useNavigate();
+  const toast = useToast();
   const { id = '' } = useParams();
+  const [params, setParams] = useSearchParams();
   const customerQuery = useCustomer(id);
-  const setActive = useSetCustomerActive(id);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [contactDetailsOpen, setContactDetailsOpen] = useState(false);
-  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
-  const [paymentSaved, setPaymentSaved] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionDone, setActionDone] = useState<string | null>(null);
-
-  if (customerQuery.isPending) {
-    return <LoadingState label={t('app.loading')} />;
-  }
-
+  const vehicles = useVehicleList({ customer_id: id, page_size: 100 }, Boolean(id));
+  const [dialog, setDialog] = useState<DialogName>(null);
+  const tabParam = params.get('tab');
+  const tab: TabName = TABS.includes(tabParam as TabName) ? (tabParam as TabName) : 'vehicles';
+  const listLink = safeReturnTo(params.get('returnTo'), '/customers');
   const customer = customerQuery.data;
 
-  // A failed background refresh keeps showing what we already have; only a first load can fail.
+  useBreadcrumbs([
+    { label: t('nav.customers'), to: listLink },
+    { label: customer?.display_name ?? t('common.loading') },
+  ]);
+
+  if (customerQuery.isPending) return <LoadingState rows={6} />;
   if (!customer) {
-    const notFound = isNotFound(customerQuery.error);
+    const missing = hasStatus(customerQuery.error, 404);
     return (
       <ErrorState
-        title={notFound ? t('customers.notFoundTitle') : t('common.loadFailedTitle')}
-        body={notFound ? t('customers.notFoundBody') : t('common.loadFailedBody')}
-        actionLabel={notFound ? t('customers.backToList') : t('app.retry')}
-        onAction={() =>
-          notFound ? void navigate('/customers', { replace: true }) : void customerQuery.refetch()
-        }
+        title={missing ? t('customers.notFoundTitle') : undefined}
+        body={missing ? t('customers.notFoundBody') : undefined}
+        onRetry={missing ? undefined : () => void customerQuery.refetch()}
+        requestId={requestIdOf(customerQuery.error)}
       />
     );
   }
 
-  const changeActive = async (isActive: boolean) => {
-    setActionError(null);
-    setActionDone(null);
-    try {
-      await setActive.mutateAsync({ version: customer.version, isActive });
-      setConfirmOpen(false);
-      setActionDone(isActive ? t('customers.reactivated') : t('customers.deactivated'));
-    } catch (error) {
-      setConfirmOpen(false);
-      if (isStaleVersion(error)) {
-        // The query refetches below, so the page already shows the latest version.
-        setActionError(t('common.staleRefreshed'));
-        void customerQuery.refetch();
-      } else if (isNetworkError(error)) {
-        setActionError(t('common.saveFailed'));
-      } else if (isApiError(error) && error.code === 'USDOT_ALREADY_IN_USE') {
-        setActionError(t('customers.errors.usdotInUseReactivate'));
-      } else {
-        const requestId = isApiError(error) ? error.requestId : undefined;
-        setActionError(
-          requestId
-            ? `${t('common.saveFailedUnexpected')} ${t('common.problemNumber', { id: requestId })}`
-            : t('common.saveFailedUnexpected'),
-        );
-      }
-    }
-  };
-
-  const address = formatAddress(customer);
+  const selectTab = (next: TabName) =>
+    setParams(
+      (current) => {
+        const copy = new URLSearchParams(current);
+        copy.set('tab', next);
+        return copy;
+      },
+      { replace: true },
+    );
+  const editLink = withReturnTo(
+    `/customers/${customer.id}/edit`,
+    `/customers/${customer.id}?tab=${tab}`,
+  );
+  const vehicleCount = vehicles.data?.total;
 
   return (
     <>
-      <FlashMessage message={(key) => t(key)} />
-      <Link
-        component={RouterLink}
-        to="/customers"
-        underline="hover"
-        sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 48, mb: 1, fontSize: 16 }}
-      >
-        ← {t('customers.backToList')}
-      </Link>
-      <Box
-        component="header"
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) auto',
-          columnGap: { xs: 1, sm: 2 },
-          rowGap: 0.5,
-          alignItems: 'center',
-          mb: 3,
-        }}
-      >
-        <Typography
-          component="h1"
-          variant="h4"
-          fontWeight={600}
-          sx={{
-            gridColumn: 1,
-            minWidth: 0,
-            maxWidth: '100%',
-            fontSize: { xs: '1.5rem', sm: '2rem' },
-            lineHeight: 1.2,
-            overflowWrap: 'anywhere',
-          }}
-        >
-          {customer.display_name}
-        </Typography>
-        <Typography
-          color="text.secondary"
-          sx={{ gridColumn: '1 / -1', fontSize: 16, overflowWrap: 'anywhere' }}
-        >
-          {t(`customers.type.${customer.type}`)}
-          {customer.usdot_number ? ` · USDOT ${customer.usdot_number}` : ''}
-        </Typography>
-        <Stack
-          direction="row"
-          spacing={{ xs: 0.5, sm: 1 }}
-          alignItems="center"
-          sx={{ gridColumn: 2, gridRow: 1 }}
-        >
-          <ActiveStatusChip isActive={customer.is_active} />
-          <Tooltip title={t('common.edit')}>
-            <IconButton
-              component={RouterLink}
-              to={`/customers/${customer.id}/edit`}
-              aria-label={t('common.edit')}
-              sx={{
-                display: { xs: 'inline-flex', sm: 'none' },
-                width: 48,
-                height: 48,
-                border: 1,
-                borderColor: 'divider',
-                borderRadius: 1,
-              }}
-            >
-              <EditOutlinedIcon />
-            </IconButton>
-          </Tooltip>
+      <PageHeader
+        leading={<InitialsTile name={customer.display_name} size={56} />}
+        title={customer.display_name}
+        status={<ActiveStatus isActive={customer.is_active} />}
+        subtitle={[
+          t(`customers.type.${customer.type}`),
+          customer.usdot_number ? t('vehicles.usdotLabel', { usdot: customer.usdot_number }) : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+        secondaryActions={
           <Button
             component={RouterLink}
-            to={`/customers/${customer.id}/edit`}
-            variant="contained"
+            to={editLink}
+            variant="outlined"
+            size="large"
             startIcon={<EditOutlinedIcon />}
-            sx={{ minHeight: 48, display: { xs: 'none', sm: 'inline-flex' } }}
           >
             {t('common.edit')}
           </Button>
-        </Stack>
-      </Box>
-
+        }
+      />
       {!customer.is_active && (
-        <Alert severity="warning" role="status" sx={{ mb: 2 }}>
+        <Alert severity="warning" sx={{ mb: 3 }}>
           {t('customers.inactiveBanner')}
         </Alert>
       )}
-      {actionDone && (
-        <Alert severity="success" role="status" sx={{ mb: 2 }} onClose={() => setActionDone(null)}>
-          {actionDone}
-        </Alert>
-      )}
-      {actionError && (
-        <Alert severity="error" role="alert" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
-          {actionError}
-        </Alert>
-      )}
 
-      <Stack spacing={2}>
-        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
-          <CustomerAccount
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 12, md: 7 }}>
+          <CustomerAccountCard
             customerId={customer.id}
-            customerName={customer.display_name}
-            onRecordPayment={() => {
-              setPaymentSaved(false);
-              setRecordPaymentOpen(true);
-            }}
+            onRecordPayment={() => setDialog('payment')}
+            onAddCharge={() => setDialog('charge')}
+            onReviewCharges={() => setDialog('monthly')}
           />
-        </Paper>
-        {paymentSaved && (
-          <Alert severity="success" role="status" onClose={() => setPaymentSaved(false)}>
-            {t('payments.savedShort')}
-          </Alert>
+        </Grid>
+        <Grid size={{ xs: 12, md: 5 }}>
+          <SectionCard title={t('customers.contact')} icon={<ContactPhoneOutlinedIcon />}>
+            <KeyValueList
+              columns={1}
+              items={[
+                ...(customer.type === 'business'
+                  ? [{ label: t('customers.fields.contactName'), value: customer.contact_name }]
+                  : []),
+                {
+                  label: t('customers.fields.phone'),
+                  value: customer.phone && (
+                    <Link href={`tel:${customer.phone}`}>{customer.phone}</Link>
+                  ),
+                },
+                {
+                  label: t('customers.fields.email'),
+                  value: customer.email && (
+                    <Link href={`mailto:${customer.email}`}>{customer.email}</Link>
+                  ),
+                },
+              ]}
+            />
+            <Button onClick={() => selectTab('details')} sx={{ mt: 2, px: 0 }}>
+              {t('customers.showAllDetails')}
+            </Button>
+          </SectionCard>
+        </Grid>
+      </Grid>
+
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+        <Tabs
+          value={tab}
+          onChange={(_event, value: TabName) => selectTab(value)}
+          variant="scrollable"
+          allowScrollButtonsMobile
+          aria-label={t('customers.sections')}
+        >
+          <Tab
+            value="vehicles"
+            id="tab-vehicles"
+            aria-controls="panel-vehicles"
+            label={
+              vehicleCount === undefined
+                ? t('nav.vehicles')
+                : t('customers.vehiclesWithCount', { count: vehicleCount })
+            }
+          />
+          <Tab
+            value="transactions"
+            id="tab-transactions"
+            aria-controls="panel-transactions"
+            label={t('transactions.title')}
+          />
+          <Tab
+            value="details"
+            id="tab-details"
+            aria-controls="panel-details"
+            label={t('customers.details')}
+          />
+        </Tabs>
+      </Box>
+      <Box role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+        {tab === 'vehicles' && <CustomerVehiclesTab customerId={customer.id} query={vehicles} />}
+        {tab === 'transactions' && <CustomerTransactionsTab customerId={customer.id} />}
+        {tab === 'details' && (
+          <CustomerDetailsTab customer={customer} onReload={() => void customerQuery.refetch()} />
         )}
-        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
-          <PaymentsPage customer={customer} showRecordAction={false} />
-        </Paper>
-        <CustomerVehicles customerId={customer.id} />
-        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
-          <Stack spacing={2}>
-            <Typography component="h2" variant="h6" fontWeight={600}>
-              {t('customers.sections.contact')}
-            </Typography>
-            <Grid container spacing={2} component="dl" sx={{ m: 0 }}>
-              {customer.type === 'business' && (
-                <Field label={t('customers.fields.contactName')} value={customer.contact_name} />
-              )}
-              <Field
-                label={t('customers.fields.phone')}
-                value={
-                  customer.phone && <Link href={`tel:${customer.phone}`}>{customer.phone}</Link>
-                }
-              />
-            </Grid>
-            <Button
-              type="button"
-              variant="text"
-              startIcon={
-                <ExpandMoreIcon
-                  sx={{ transform: contactDetailsOpen ? 'rotate(180deg)' : undefined }}
-                />
-              }
-              aria-expanded={contactDetailsOpen}
-              aria-controls={`customer-contact-details-${customer.id}`}
-              onClick={() => setContactDetailsOpen((open) => !open)}
-              sx={{ alignSelf: 'flex-start', minHeight: 48 }}
-            >
-              {t(
-                contactDetailsOpen
-                  ? 'customers.hideContactDetails'
-                  : 'customers.showContactDetails',
-              )}
-            </Button>
-            <Collapse in={contactDetailsOpen}>
-              <Grid
-                id={`customer-contact-details-${customer.id}`}
-                container
-                spacing={2}
-                component="dl"
-                sx={{ m: 0 }}
-              >
-                <Field
-                  label={t('customers.fields.email')}
-                  value={
-                    customer.email && (
-                      <Link href={`mailto:${customer.email}`}>{customer.email}</Link>
-                    )
-                  }
-                />
-                <Field label={t('customers.fields.usdot')} value={customer.usdot_number} />
-                <Field
-                  label={t('customers.fields.address')}
-                  value={address && <span style={{ whiteSpace: 'pre-line' }}>{address}</span>}
-                />
-                <Field
-                  label={t('customers.fields.notes')}
-                  value={
-                    customer.notes && (
-                      <span style={{ whiteSpace: 'pre-line' }}>{customer.notes}</span>
-                    )
-                  }
-                />
-                <Field
-                  label={t('customers.fields.created')}
-                  value={formatDate(customer.created_at, i18n.resolvedLanguage ?? 'en')}
-                />
-                <Field
-                  label={t('customers.fields.updated')}
-                  value={formatDate(customer.updated_at, i18n.resolvedLanguage ?? 'en')}
-                />
-              </Grid>
-            </Collapse>
-          </Stack>
-        </Paper>
+      </Box>
 
-        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
-          {customer.is_active ? (
-            <Button
-              color="error"
-              variant="outlined"
-              onClick={() => setConfirmOpen(true)}
-              disabled={setActive.isPending}
-              sx={{ minHeight: 48 }}
-            >
-              {t('customers.deactivate.action')}
-            </Button>
-          ) : (
-            <Button
-              variant="outlined"
-              onClick={() => void changeActive(true)}
-              disabled={setActive.isPending}
-              sx={{ minHeight: 48 }}
-            >
-              {t('customers.reactivate.action')}
-            </Button>
-          )}
-        </Paper>
-      </Stack>
-
-      <Dialog
-        open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        aria-labelledby="deactivate-title"
-        aria-describedby="deactivate-body"
-      >
-        <DialogTitle id="deactivate-title">
-          {t('customers.deactivate.title', { name: customer.display_name })}
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText id="deactivate-body">
-            {t('customers.deactivate.body')}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmOpen(false)} autoFocus disabled={setActive.isPending}>
-            {t('common.cancel')}
-          </Button>
-          <Button
-            color="error"
-            variant="contained"
-            onClick={() => void changeActive(false)}
-            disabled={setActive.isPending}
-          >
-            {t('customers.deactivate.confirm')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-      {recordPaymentOpen && (
+      {dialog === 'payment' && (
         <RecordPaymentDialog
           customer={customer}
-          onClose={() => setRecordPaymentOpen(false)}
-          onSaved={() => {
-            setRecordPaymentOpen(false);
-            setPaymentSaved(true);
+          onClose={() => setDialog(null)}
+          onRecorded={() => {
+            setDialog(null);
+            toast.success(t('payments.recorded'));
           }}
+        />
+      )}
+      {dialog === 'charge' && (
+        <OneTimeChargeDialog customer={customer} onClose={() => setDialog(null)} />
+      )}
+      {dialog === 'monthly' && (
+        <MonthlyChargesDialog
+          customerId={customer.id}
+          vehicles={vehicles.data?.items ?? []}
+          onClose={() => setDialog(null)}
         />
       )}
     </>

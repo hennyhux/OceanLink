@@ -1,70 +1,61 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 
 import { useDebouncedValue } from './useDebouncedValue';
 
-// Search text, "show inactive" and page for a list screen. They live in the URL so they survive
-// navigation and refresh. The text box keeps its own state: router updates run in a transition,
-// which would drop keystrokes and break Chinese IME input if the input were bound to the URL.
+// Search text, page, and filters live in the URL so Back and refresh keep them.
 export function useListSearch() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const urlQ = searchParams.get('q') ?? '';
-  const includeInactive = searchParams.get('inactive') === '1';
-  const showOverdue = searchParams.get('overdue') === '1';
-  const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
+  const [params, setParams] = useSearchParams();
+  const urlQ = params.get('q') ?? '';
+  const page = Math.max(1, Number(params.get('page') ?? 1) || 1);
+  const [text, setText] = useState(urlQ);
+  const debounced = useDebouncedValue(text, 300);
 
-  const [searchText, setSearchText] = useState(urlQ);
-  const debouncedText = useDebouncedValue(searchText, 300);
+  const update = useCallback(
+    (changes: Record<string, string | null>) => {
+      setParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          for (const [key, value] of Object.entries(changes)) {
+            if (value === null || value === '') next.delete(key);
+            else next.set(key, value);
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setParams],
+  );
 
-  // The last search text this hook put in the URL. It tells our own writes apart from changes
-  // made elsewhere, such as clicking the sidebar link, which should reset the text box.
-  const writtenQ = useRef(urlQ.trim());
-  // The last debounced value we acted on. Only a new value may write to the URL, otherwise an
-  // old one would be written back right after the search was cleared.
-  const handledText = useRef(debouncedText);
-
+  // Typed text goes to the URL after a short pause and always restarts at page 1.
   useEffect(() => {
-    if (debouncedText === handledText.current) return;
-    handledText.current = debouncedText;
-    const trimmed = debouncedText.trim();
-    if (trimmed === urlQ.trim()) return;
-    writtenQ.current = trimmed;
-    const next = new URLSearchParams(searchParams);
-    if (trimmed) next.set('q', trimmed);
-    else next.delete('q');
-    next.delete('page');
-    setSearchParams(next, { replace: true });
-  }, [debouncedText, urlQ, searchParams, setSearchParams]);
+    if (debounced.trim() !== urlQ.trim()) update({ q: debounced.trim() || null, page: null });
+    // Only the debounced text should trigger this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debounced]);
 
+  // A change from outside (Back button, a link) replaces the box text.
   useEffect(() => {
-    if (urlQ.trim() === writtenQ.current) return;
-    writtenQ.current = urlQ.trim();
-    setSearchText(urlQ);
+    setText((current) => (current.trim() === urlQ.trim() ? current : urlQ));
   }, [urlQ]);
 
-  const updateParams = (changes: Record<string, string | null>) => {
-    const next = new URLSearchParams(searchParams);
-    for (const [key, value] of Object.entries(changes)) {
-      if (value === null || value === '') next.delete(key);
-      else next.set(key, value);
-    }
-    setSearchParams(next, { replace: true });
-  };
-
-  const clearSearch = () => {
-    writtenQ.current = '';
-    setSearchText('');
-    updateParams({ q: null, page: null });
-  };
-
   return {
-    urlQ,
-    includeInactive,
-    showOverdue,
+    q: urlQ,
+    text,
+    setText,
+    clear: () => {
+      setText('');
+      update({ q: null, page: null });
+    },
+    // Pushes the typed text to the URL now, without waiting for the pause.
+    commit: () => update({ q: text.trim() || null, page: null }),
     page,
-    searchText,
-    setSearchText,
-    clearSearch,
-    updateParams,
+    setPage: (next: number) => update({ page: next > 1 ? String(next) : null }),
+    flag: (name: string) => params.get(name) === '1',
+    setFlag: (name: string, on: boolean) => update({ [name]: on ? '1' : null, page: null }),
+    value: (name: string) => params.get(name) ?? '',
+    setValues: (changes: Record<string, string | null>) => update({ ...changes, page: null }),
+    params,
   };
 }

@@ -536,7 +536,9 @@ audit_events: [{ action ("recorded" | "reversed" | "allocated"), actor_id, reaso
 - `effective_on` cannot be in the future in the lot time zone.
 - `reference` at most 200 characters, `notes` at most 2000.
 - Archived customers can still pay.
-- A new payment starts as unapplied credit. It is applied when staff issue charges with `apply_credit`, or later through `POST /payments/{id}/allocate`.
+- Automatically allocate each new payment to the same customer's unpaid issued invoices, ordered by `due_on`, then `issued_on`, then `id` ascending. Include invoices not yet due and all sources; skip paid, draft, and void invoices. Never exceed the payment's available amount or an invoice's remaining collectible balance.
+- Any remainder stays as unapplied customer credit. With no unpaid invoices, the full payment becomes credit. Existing credit can still be applied when staff issue charges with `apply_credit`, or later through `POST /payments/{id}/allocate`.
+- Payment creation, allocations, audit events, and the idempotency record commit in one transaction. Each allocation records the acting staff user and invoice number and bumps the payment version. Return its final version and allocation/credit amounts. Same-key retries never allocate twice; reversal releases the allocations.
 - This only records money already received. It never charges a card.
 
 `POST /payments/{id}/reverse` (admin, `If-Match`, `Idempotency-Key`), body `{ "reason": "Entered twice" }`:

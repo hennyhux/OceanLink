@@ -9,14 +9,12 @@ export function createQueryClient(): QueryClient {
         staleTime: 30_000,
         refetchOnWindowFocus: false,
         retry: (failureCount, error) => {
-          // Never retry auth or permission failures; retry transient ones a little.
+          // Never retry auth, permission, or validation failures.
           if (isApiError(error) && error.status >= 400 && error.status < 500) return false;
           return failureCount < 2;
         },
       },
-      mutations: {
-        retry: false,
-      },
+      mutations: { retry: false },
     },
   });
 }

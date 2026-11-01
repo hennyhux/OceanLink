@@ -2,18 +2,14 @@ import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
-import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
+import Typography from '@mui/material/Typography';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBlocker } from 'react-router';
 
-interface UnsavedChangesGuardProps {
-  when: boolean;
-}
-
-// Stops in-app navigation and tab close while a form has unsaved edits.
-export function UnsavedChangesGuard({ when }: UnsavedChangesGuardProps) {
+// Asks before leaving a form with unsaved changes.
+export function UnsavedChangesGuard({ when }: { when: boolean }) {
   const { t } = useTranslation();
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
@@ -22,34 +18,29 @@ export function UnsavedChangesGuard({ when }: UnsavedChangesGuardProps) {
 
   useEffect(() => {
     if (!when) return;
-    const handler = (event: BeforeUnloadEvent) => {
+    const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
-      // Older Chromium still needs this to show the prompt.
-      event.returnValue = '';
     };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
   }, [when]);
-
-  const open = blocker.state === 'blocked';
 
   return (
     <Dialog
-      open={open}
+      open={blocker.state === 'blocked'}
       onClose={() => blocker.reset?.()}
       aria-labelledby="unsaved-title"
-      aria-describedby="unsaved-body"
     >
-      <DialogTitle id="unsaved-title">{t('common.unsavedTitle')}</DialogTitle>
+      <DialogTitle id="unsaved-title">{t('unsaved.title')}</DialogTitle>
       <DialogContent>
-        <DialogContentText id="unsaved-body">{t('common.unsavedBody')}</DialogContentText>
+        <Typography>{t('unsaved.body')}</Typography>
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ px: 3, pb: 2.5 }}>
         <Button onClick={() => blocker.reset?.()} autoFocus>
-          {t('common.stay')}
+          {t('unsaved.stay')}
         </Button>
-        <Button color="error" onClick={() => blocker.proceed?.()}>
-          {t('common.leave')}
+        <Button color="error" variant="contained" onClick={() => blocker.proceed?.()}>
+          {t('unsaved.leave')}
         </Button>
       </DialogActions>
     </Dialog>

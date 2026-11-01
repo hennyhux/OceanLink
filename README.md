@@ -1,177 +1,200 @@
-- Displayed balances are based on issued invoices and valid payments, not vehicle monthly rates. Saving a parking rate updates the monthly total and unbilled amount. Staff then choose **Review monthly charges** and explicitly issue the reviewed charges; saving a rate alone never silently creates debt.
-- `POST /billing-runs/preview` accepts `{ customer_id, through_date }` and returns a review resource with `id`, vehicle-period `lines`, `total`, `credit_available`, `amount_due_after_credit`, skipped-period count, status and issued invoice numbers. It includes unbilled service periods starting on or before the selected business date. Periods are billed in advance, partial periods are prorated by calendar days, and rates are split at effective-date changes with half-up cent rounding.
-- `POST /billing-runs/{id}/issue` accepts `{ apply_credit: boolean }` and an `Idempotency-Key`. It issues immutable invoice snapshots and optionally allocates existing credit to those new invoices in the same transaction. Changes to previewed vehicle/customer versions or financial state require a fresh preview (`412`); billed source periods cannot be issued twice (`409`). Retrying the same operation/key returns the original result.
-- The ledger also provides `monthly_parking` (current monthly rates total) and `unbilled_parking` (unissued period charges) as Money values. Neither is included in debt until issuance. Customer account details keep gross invoices and unapplied credit separate from the net balance.
-- New receipts initially remain unapplied customer credit. Staff can explicitly apply that credit while issuing reviewed monthly charges. General-purpose payment reallocation and the full invoice/PDF interface are not yet implemented. Customer net balance is outstanding issued invoices minus unapplied credit; last payment excludes reversed receipts and opening-credit adjustments.
-# OceanLink Frontend
+```text
+    ░▒▓█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█▓▒░
 
-React + TypeScript frontend for OceanLink, a truck parking management app. See the docs in [.github](.github) for requirements, deployment, and project context.
+           ██████╗   ██████╗ ███████╗  █████╗  ███╗   ██╗ ██╗      ██╗ ███╗   ██╗ ██╗  ██╗
+          ██╔═══██╗ ██╔════╝ ██╔════╝ ██╔══██╗ ████╗  ██║ ██║      ██║ ████╗  ██║ ██║ ██╔╝
+          ██║   ██║ ██║      █████╗   ███████║ ██╔██╗ ██║ ██║      ██║ ██╔██╗ ██║ █████╔╝
+          ██║   ██║ ██║      ██╔══╝   ██╔══██║ ██║╚██╗██║ ██║      ██║ ██║╚██╗██║ ██╔═██╗
+          ╚██████╔╝ ╚██████╗ ███████╗ ██║  ██║ ██║ ╚████║ ███████╗ ██║ ██║ ╚████║ ██║  ██╗
+           ╚═════╝   ╚═════╝ ╚══════╝ ╚═╝  ╚═╝ ╚═╝  ╚═══╝ ╚══════╝ ╚═╝ ╚═╝  ╚═══╝ ╚═╝  ╚═╝
 
-## Requirements
+    ░▒▓█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█▓▒░
 
-- Node.js 20.19 or newer (24 LTS recommended)
-- npm 10 or newer
+                    t r u c k   p a r k i n g   o f f i c e   ·   w e b   a p p
 
-On Windows PowerShell, `npm` may be blocked by the execution policy. Use `npm.cmd` instead, or run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+          ┌──────────────────────────────────────────────────────────────────────────────┐
+          │ NAME ........ OceanLink (front end)                                          │
+          │ FOR ......... A family-run truck parking lot and the people who work in it   │
+          │ BUILT WITH .. React, TypeScript, and Vite                                    │
+          │ LANGUAGES ... English and 简体中文                                           │
+          │ WORKS ON .... Laptop, tablet, and phone                                      │
+          │ BACKEND ..... A separate FastAPI service (not in this repo)                  │
+          │ STATUS ...... First release (MVP 1), running on demo data for now            │
+          └──────────────────────────────────────────────────────────────────────────────┘
 
-## Setup
 
-```bash
-npm install
-cp .env.example .env   # optional, defaults work for local development
+  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+  █▓▒░  H E L L O                                                                             ░▒▓█
+  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+    Thanks for stopping by! OceanLink is the office app for a family-run truck parking lot.
+
+    It takes the place of the spreadsheet. It keeps track of who parks here, which trucks
+    they have, what each truck pays every month, what has been billed, what has been paid,
+    and who still owes money.
+
+    The people using it are the lot owners and their staff, and most of them are not
+    technical. So the screens use big text, plain words, and one clear next step. Everything
+    works in English and Chinese, on a laptop, a tablet, or a phone.
+
+
+
+  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+  █▓▒░  W H A T   Y O U   C A N   D O                                                         ░▒▓█
+  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+    [+] Overview ........... see who is past due, what came in this month, and what needs
+                             attention today
+    [+] Customers .......... find anyone quickly, see what they owe, and look through their
+                             vehicles and history
+    [+] Vehicles ........... keep track of trucks, trailers, plates, and USDOT numbers for
+                             each customer
+    [+] Monthly parking .... give each vehicle a monthly price and keep its rate history
+    [+] Billing ............ look over a customer's monthly charges, then issue them. One-time
+                             charges work the same way
+    [+] Payments ........... record cash, checks, and transfers, and fix a mistake with a
+                             reversal (admins only)
+
+    Money a customer owes shows in red, and credit shows in green. There is always a word
+    next to the color, so nobody has to rely on telling red from green.
+
+
+
+  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+  █▓▒░  U N D E R   T H E   H O O D                                                           ░▒▓█
+  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+    The app is a React single-page site written in TypeScript. It is a front end only: all
+    of the real data lives in the separate FastAPI backend, which the app talks to over a
+    simple JSON API.
+
+    [*] Look and feel .... Material UI (MUI), with one theme holding the colors, text sizes,
+                           and spacing
+    [*] Pages ............ React Router, with each page loaded only when it is first opened
+    [*] Server data ...... TanStack Query keeps lists and balances fresh after every change
+    [*] Forms ............ React Hook Form with Zod rules, so mistakes are caught before
+                           anything is sent
+    [*] Languages ........ i18next, with a full English and Chinese copy of every message
+    [*] Tests ............ Vitest and Testing Library, running whole screens against a fake
+                           backend
+
+    A quick map of the code, if you want to find your way around:
+
+      src/app/          the page frame (sidebar, top bar), routes, and the theme
+      src/components/   shared building blocks, like cards, tables, and dialogs
+      src/features/     one folder per area: customers, vehicles, billing, payments, ...
+      src/lib/          the API client, money and date helpers, and the translations
+      src/mocks/        the fake backend used for demos and tests
+
+    Each feature folder follows the same pattern: the API calls and their cache keys, the
+    form rules, and then the pages themselves. Money is always stored and sent as whole
+    cents, never as decimals, and totals always come from the server instead of being added
+    up in the browser.
+
+
+
+  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+  █▓▒░  G E T T I N G   S T A R T E D                                                         ░▒▓█
+  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+    You will need Node.js 20.19 or newer. Then:
+
+      1. npm install
+      2. npm run dev:mock        <-- try it with fake demo data (no backend needed)
+         or
+         npm run dev             <-- use the real backend, expected on port 8000
+      3. open http://localhost:5173
+
+    On Windows, if PowerShell blocks npm, use npm.cmd instead. When running against the real
+    backend, the dev server forwards /api requests to it so the sign-in cookie works. You
+    can point it somewhere else with VITE_DEV_PROXY_TARGET in a .env file.
+
+    In demo mode you can sign in with these made-up accounts:
+
+      admin@example.com        admin-password         can do everything
+      operator@example.com     operator-password      everyday staff work
+
+    The demo comes with a few pretend customers and vehicles, so there is something to look
+    at right away. Anything you change resets when you reload the page. Before sharing
+    changes, these four checks should all pass:
+
+      npm run typecheck    npm run lint    npm run test    npm run build
+
+
+
+  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+  █▓▒░  G O O D   T O   K N O W                                                               ░▒▓█
+  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+    [+] Careful with money ........ Anything that moves money shows a review step first. If
+                                    the connection drops halfway, the app says it is not sure
+                                    what happened and offers "Check again". That safely
+                                    retries without ever recording the same payment or charge
+                                    twice.
+    [+] Always up to date ......... After you record a payment or issue charges, the customer
+                                    page, the customer list, and the Overview all refresh by
+                                    themselves.
+    [+] Two people, one record .... If a coworker saves a customer or vehicle first, the app
+                                    tells you and keeps what you typed, instead of quietly
+                                    overwriting their change.
+    [+] Easy to come back to ...... Search words, filters, and the page number live in the web
+                                    address, so the Back button returns you to the same view.
+    [+] Phone friendly ............ On small screens, tables turn into cards, the menu slides
+                                    out, and the main action becomes a round button in the
+                                    corner.
+
+
+
+  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+  █▓▒░  T R Y I N G   I T   S A F E L Y                                                       ░▒▓█
+  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+    Demo mode runs a pretend backend inside the browser, so nothing is stored and nothing is
+    sent anywhere. Please do not type real customer details into it. The build refuses to
+    include demo mode in a normal release, so it cannot slip into production by accident.
+
+    There is also a special demo build (npm run build:demo) for putting a password-protected
+    preview on a host like AWS Amplify. Use it with made-up data only.
+
+    One more thing: hiding a button is only a convenience. The backend is the one that
+    decides who is allowed to do what.
+
+
+
+  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+  █▓▒░  N O T   D O N E   Y E T                                                               ░▒▓█
+  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+    [-] It has only been tried against the demo data, not the real backend.
+    [-] Invoices, Reports, Settings, and My profile are placeholder pages until their backend
+        parts exist.
+    [-] Invoice PDFs, refunds, imports, and exports are still to come.
+    [-] A payment waits as customer credit until the next monthly billing uses it. A screen
+        for applying a payment by hand is planned.
+    [-] Browser-based end-to-end tests and automatic accessibility checks have not been set
+        up.
+
+
+
+  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+  █▓▒░  T H A N K S   F O R   R E A D I N G                                                   ░▒▓█
+  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+    This was made for the people who run the lot every day, and it is still growing. If
+    something is confusing or broken, that is a bug in the app, not in you. Please tell us.
+
+    ░▒▓█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█▓▒░
+                               OCEANLINK  ·  made with care  ·  2026
+    ░▒▓█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█▓▒░
 ```
 
-## Run against the real backend
+## Where to read more
 
-Start the FastAPI backend on `http://localhost:8000`, then:
+The detailed documents live in the `.github` folder:
 
-```bash
-npm run dev
-```
-
-Open `http://localhost:5173`. The Vite dev server proxies `/api` to the backend so the session cookie stays first party. Change the target with `VITE_DEV_PROXY_TARGET` in `.env`.
-
-Note: the production cookie name `__Host-session_id` requires HTTPS. For local HTTP development the backend needs a dev-mode cookie name without the `__Host-` prefix, or you need a local HTTPS setup. This is an open decision (see [.github/REVIEW.md](.github/REVIEW.md) item 3.3).
-
-## Run with development mocks
-
-There is no backend yet. Mock mode runs the agreed auth contract in the browser using MSW.
-
-```bash
-npx msw init public/   # one time, creates public/mockServiceWorker.js
-npm run dev:mock
-```
-
-A warning banner shows while mocks are on. Mock accounts (synthetic, not real people):
-
-| Email                  | Password            | Role     |
-| ---------------------- | ------------------- | -------- |
-| `admin@example.com`    | `admin-password`    | admin    |
-| `operator@example.com` | `operator-password` | operator |
-
-Rules for mock mode:
-
-- It only runs when `VITE_ENABLE_MOCKS=true` **and** the build is a dev build.
-- A production build with `VITE_ENABLE_MOCKS=true` fails on purpose.
-- Unmocked `/api` requests fail loudly. There is no silent fallback.
-- Mock handlers live in `src/mocks/` and are never imported by production code paths.
-
-### Temporary Amplify demo (synthetic data only)
-
-Use this build only for password-protected testing. It enables the mock API in a
-production-optimized bundle; it does not connect to a backend, and mock changes
-reset when the page reloads. Never enter real customer data or reuse real
-credentials.
-
-Build and package the contents of `dist` so `index.html` is at the ZIP root:
-
-```powershell
-npm.cmd run build:demo
-tar.exe -a -c -f .\OceanLink-demo.zip -C .\dist index.html assets mockServiceWorker.js
-```
-
-In AWS Amplify Hosting, create an app with **Deploy without Git** and upload
-`OceanLink-demo.zip`. Add this rewrite under **Rewrites and redirects** so direct
-navigation to React routes works:
-
-| Source | Target | Status |
-| --- | --- | --- |
-| `</^[^.]+$/>` | `/index.html` | `200 (Rewrite)` |
-
-Then enable Amplify access control with a temporary password for testers. The
-Amplify password is only an extra demo access barrier; it does not make the
-mock data suitable for real customer information.
-
-## Checks
-
-```bash
-npm run typecheck
-npm run lint
-npm run test
-npm run build
-```
-
-## Project layout
-
-```
-src/
-  app/          providers, theme, router, app shell, navigation
-  features/     one folder per feature (auth, customers, vehicles, overview, placeholders)
-  components/   shared UI pieces (loading, error, language switch, page header, dialogs)
-  hooks/        small shared hooks
-  lib/          api client, config, i18n, query client
-  mocks/        MSW handlers (dev and test only)
-  test/         test setup and render helpers
-```
-
-## API contract used
-
-From REQUIREMENTS.md section 11.2, base path `/api/v1`:
-
-- `GET /reports/summary` returns the dashboard KPIs: `overdue_invoices`, `outstanding_invoices`, `unbilled_parking`, `payments_received_this_month`, `total_customers`, and `total_trucks`. Counts include inactive records; truck totals count trucks and combinations, excluding standalone trailers. Payment totals exclude reversed receipts.
-
-- `POST /auth/login` with `{ email, password }`
-- `GET /auth/session`
-- `POST /auth/logout`
-
-Assumptions made where the spec is silent (to confirm against the backend OpenAPI schema):
-
-- Login and session both return `{ user, session: { idle_expires_at, absolute_expires_at } }`.
-- User has `id, email, name, role, is_active, preferred_language, must_change_password`.
-- Wrong credentials return `401` with code `INVALID_CREDENTIALS`.
-
-Customers (REQUIREMENTS.md sections 10 and 11.3):
-
-- `GET /customers?q=&include_inactive=&overdue_only=&page=&page_size=` returns `{ items, page, page_size, total }`. `q` matches name, contact, phone, email, and USDOT; `overdue_only=true` returns customers with a positive overdue invoice balance.
-- `POST /customers` creates one. `GET /customers/{id}` reads one.
-- `PATCH /customers/{id}` with `If-Match: "<version>"` updates fields or `is_active`. Stale version returns `412`.
-- Duplicate USDOT among active customers returns `409` with code `USDOT_ALREADY_IN_USE`.
-- Validation returns `422` with `field_errors: { field: [code] }`.
-
-Assumed customer fields: `id, version, type (business | individual), display_name, contact_name, phone, email, usdot_number, address_line1, address_line2, city, state, postal_code, notes, is_active, created_at, updated_at`. There is no delete; customers are deactivated.
-
-Vehicles (REQUIREMENTS.md sections 7.1, 10 and 11.3):
-
-- `GET /vehicles?q=&customer_id=&include_inactive=&page=&page_size=` returns `{ items, page, page_size, total }`. `q` matches unit number, plate (ignoring spaces and dashes), USDOT, and customer name.
-- `POST /vehicles` creates one. The add-vehicle form optionally accepts a monthly parking amount and requires a billing start date when an amount is entered. A blank amount leaves parking unconfigured; zero means free parking. The request includes optional `parking: { starts_on, ends_on: null, monthly_rate: { amount, currency: "USD" }, effective_on, reason }`, with the initial effective date equal to the start date. The backend must validate and create the vehicle and parking together in one transaction; invalid parking must not leave a vehicle behind. `GET /vehicles/{id}` reads one.
-- `PATCH /vehicles/{id}` with `If-Match: "<version>"` updates fields or `is_active`. The owner (`customer_id`) is never sent in an edit; changing owner is a separate workflow.
-- A vehicle needs a plate with its state, or a USDOT number, or both. A USDOT-only vehicle also needs a unit number.
-- Duplicates among active vehicles return `409` with code `PLATE_ALREADY_IN_USE` (same plate and state) or `UNIT_NUMBER_ALREADY_IN_USE` (same USDOT and unit number).
-- Validation returns `422` with `field_errors: { field: [code] }`.
-
-Assumed vehicle fields: `id, version, customer_id, customer_name (read-only), vehicle_type (truck | trailer | combination | compact), unit_number, plate_number, plate_jurisdiction, usdot_number, is_active, created_at, updated_at, parking`. `parking` is null until monthly service is configured.
-
-Customer overview highlights positive outstanding balances and overdue amounts in red; zero balances and customer credit stay neutral. The Customers tab also uses red balance badges for positive outstanding amounts in both its desktop table and mobile cards, while preserving neutral zero and green credit badges. The account summary no longer shows an active-truck count; the customer's vehicle list shows the server-reported total of active vehicles of all types.
-
-The Overview total owed is red when positive. Recording/reversing payments and issuing monthly or one-time charges invalidate both the Overview metrics and customer-list balances, so returning to either screen refreshes the totals immediately rather than waiting for the query cache to expire. Parking saves refresh the Overview's unbilled total; new customers and vehicles refresh its record counts.
-
-Vehicle monthly parking and customer accounts (proposed schemas, pending backend OpenAPI):
-
-- No separate parking contracts, approval workflow or contract endpoints remain. Old `/agreements` bookmarks redirect to `/vehicles`.
-- `POST /vehicles/{id}/parking` with `If-Match` saves `{ starts_on, ends_on, monthly_rate: { amount, currency: "USD" }, effective_on, reason }` and returns the updated vehicle. Dates are business dates and service ends are exclusive. Initial effective date equals service start. Monthly parking has no capacity limit, pool, or vehicle-type category.
-- Returned `parking` adds append-only `rate_history: [{ effective_on, monthly_rate, reason }]`. Reads select the current price by effective date; future prices remain scheduled without rewriting history.
-- Monthly periods begin on the vehicle's service start date and recur monthly on that day. Use the last day of shorter months, then restore the original day when possible. The first period is a full month from the service start; there are no customer billing-day or payment-term defaults.
-- Existing rate and end-date changes require admin access. New rates must have a future effective date after the last scheduled change. Initial start is immutable in ordinary edits. End monthly service before archiving a vehicle; preserve its history and debt.
-- `GET /customers/{id}/ledger` returns `{ as_of, outstanding, overdue, unapplied_credit, net_balance, last_payment }`. Monetary fields use `{ amount, currency: "USD" }`. `last_payment` is null or `{ id, amount, effective_on, method }`, selected from valid non-reversed receipts by effective date and a deterministic tie-break. Opening credit is not a payment. Net balance is outstanding minus unapplied credit, calculated by the backend.
-- Displayed balances are based on issued invoices and valid payments, not vehicle monthly rates. Saving a rate updates monthly parking and unbilled totals. Staff choose **Review monthly charges** and explicitly issue the reviewed charges before they become debt.
-- `POST /billing-runs/preview` accepts `{ customer_id, through_date }` and returns a run with vehicle-period lines, total, available credit, projected net amount due and skipped-period count. It includes unbilled periods starting through the selected date. Periods are billed in advance, partial periods are prorated by calendar days, effective-dated rate changes are honored, and cent amounts use half-up rounding.
-- `POST /billing-runs/{id}/issue` accepts `{ apply_credit: boolean }` and `Idempotency-Key`. Issuance creates immutable invoice snapshots and optionally applies existing credit to the new invoices atomically. Changed vehicle/customer versions or financial state require a fresh review (`412`); source periods cannot be billed twice (`409`). Retrying identical content/key returns the original result.
-- The ledger also returns `monthly_parking` and `unbilled_parking` as Money values. These are informational until issuance and are not added directly to debt. Full invoice management/PDFs and general-purpose payment reallocation remain unfinished.
-- Mock mode uses synthetic ledger history for the first demo customer ($150 due, $50 overdue, last payment $300 by bank transfer). Vehicles start without monthly parking. Receipt recording and reversal now update the mock ledger. Data resets on reload; mock effective dates use UTC. This is not a production accounting engine or durable audit store. Real integration remains unverified.
-- There are no persisted contract records in this frontend. A future legacy-data migration must preserve source history and obtain explicit per-vehicle price allocations rather than silently splitting combined legacy totals.
-
-Recorded payments (proposed backend contract):
-
-- Customer transaction history paginates payments and manual charges independently, 20 items per page, using separate Previous/Next controls. Search and filter changes reset both lists to page 1. Manual charges use `GET /invoices` with `customer_id`, `source_type=manual`, optional `q`/`from`/`to`, `page`, and `page_size`; the response must include `{ items, page, page_size, total }`. Scrolling does not load additional records.
-- This workflow records cash/check/transfer/card payments already collected outside OceanLink. It never charges a card or moves money.
-- `GET /payments` accepts `customer_id`, `q` (customer name/reference), inclusive business-date `from`/`to`, `method`, `status`, `page`, and `page_size`. Lists use the standard paged shape and sort by effective date, creation timestamp and ID, descending.
-- `POST /payments` requires `Idempotency-Key` and `{ customer_id, amount: { amount, currency: "USD" }, effective_on, method, reference, notes }`. Amounts are positive integer cents. Methods: `cash | check | bank_transfer | external_card | other`. Date received cannot be in the future in the configured lot time zone. Existing inactive customers may pay debt.
-- `GET /lots/current` supplies the configured `time_zone` and `currency` for the receipt form. The mock uses UTC; production must supply the real lot setting.
-- `GET /payments/{id}` returns receipt details including version, customer snapshot, original amount, `allocated_amount`, `available_credit`, effective date, method, reference, notes, `recorded_by`, creation time, `status: received | reversed`, optional reversal metadata and audit events.
-- `POST /payments/{id}/reverse` requires an admin, `If-Match`, `Idempotency-Key`, and `{ reason }`. It corrects an erroneous record, preserves history, undoes allocations atomically, and updates balances. It is not a refund. There are no ordinary payment-edit or delete endpoints.
-- The backend must enforce staff authorization on every read/write, CSRF checks on browser writes, transactions for receipt/reversal/ledger changes, and idempotency scoped to actor and operation content. Store idempotency records for at least 30 days; reuse with different content returns `409`, stale versions return `412`.
-- Receipt writes have a 15-second client timeout. Unknown results lock the entered values and offer an explicit check that reuses the original payload and key. This safely reconciles either a committed request or one that never reached the server. Pending keys stay in memory; closing/reloading is warned against and must be reconciled through history before a new entry.
-- New receipts initially remain unapplied customer credit. Staff can explicitly apply that credit when issuing reviewed monthly charges. Customer net balance is outstanding issued invoices minus unapplied credit; last payment excludes reversed receipts and opening-credit adjustments.
-- The mock retains a synthetic legacy receivable of $450, including $350 overdue before the seeded $300 payment allocation. New receipt/reversal history is shared with the customer ledger, but is not durable across reloads. Existing read fixtures are development-only; real backend authorization and accounting remain unverified.
-
-The HTTP client sends `credentials: "include"` and `X-Requested-With: XMLHttpRequest` on every write. Session IDs are never stored in JavaScript. The only thing in `localStorage` is the UI language.
+- [UX_REBUILD.md](.github/UX_REBUILD.md): how the app looks and behaves, screen by screen
+- [REQUIREMENTS.md](.github/REQUIREMENTS.md): what the business needs and the rules it follows
+- [BACKEND_REQUIREMENTS.md](.github/BACKEND_REQUIREMENTS.md): what the backend needs to provide
+- [BACKEND_LOGIC_CHANGES.md](.github/BACKEND_LOGIC_CHANGES.md): changes the backend team should know about
+- [DEPLOYMENT.md](.github/DEPLOYMENT.md): how the app goes live on AWS
+- [GLOBAL_CONTEXT.md](.github/GLOBAL_CONTEXT.md): project notes, decisions, and open questions

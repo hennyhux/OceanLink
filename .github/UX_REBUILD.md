@@ -231,7 +231,7 @@ Use `@mui/icons-material`, Outlined variants, 24px in nav and 20px inline. Every
 | --- | --- | --- |
 | 1200px and wider | Expanded, 264px | Full layout |
 | 900px to 1199px (tablet landscape) | Icon rail, 80px, labels in tooltips; menu button opens it as an overlay | Tables keep all columns |
-| Under 900px (tablet portrait and phones) | Hidden; menu button opens a full-height drawer | Tables become cards (section 5.3); the page's main action becomes a floating button at bottom right |
+| Under 900px (tablet portrait and phones) | Hidden; menu button opens a full-height drawer | Tables become cards (section 5.3); the page's main action becomes a floating button at bottom right. Under 600px the top bar shows only a back link to the parent page instead of the full breadcrumb, because the page title already names the current page. |
 
 No horizontal page scrolling at any width. Wide tables scroll inside their own card only, and the first column stays visible.
 
@@ -354,31 +354,53 @@ Each screen lists layout, data, actions, and states. Every screen must also cove
 
 ### 7.2 Overview
 
-Data: `GET /reports/summary` (the six KPIs only).
+Redesigned 2026-10-31 at the owner's request: four headline cards, then "Needs attention" and "Payment summary", then "Recent activity" and "Business snapshot". Each card loads on its own, so one failed request never hides the others or turns into a $0.00.
 
 ```
-Overview                                        [ Record payment ] [ Add customer ]
+Overview                                   [ + Add customer ] [ + Record payment ]
+As of Oct 31, 2026
 
-+------------------------------------------------------------------------------+
-| Customers owe in total                                                       |
-| $1,250.00  (red when > 0)                                                    |
-|   Past due, follow up   $300.00  (red, links to /customers?overdue=1)        |
-|   Not due yet           $950.00  (outstanding minus overdue, from API values)|
-+------------------------------------------------------------------------------+
-+------------------------------+  +------------------------------------------+
-| Payments received this month |  | Charges not billed yet                   |
-| $4,444.00                    |  | $55.00                                   |
-| Oct 1 to Oct 31, 2026        |  | Review them on each customer's page      |
-+------------------------------+  +------------------------------------------+
-+------------------------------+  +------------------------------------------+
-| Customers                    |  | Trucks                                   |
-| 5 (including inactive)       |  | 6 (trucks and combinations)              |
-+------------------------------+  +------------------------------------------+
++ Past due ------+ + Paid this month + + Not billed yet -+ + Active customers +
+| $50.00 (red)   | | $300.00         | | $280.00         | | 4                |
+| 1 customer     | | 1 payment       | | Ready to bill   | | 5 total · 1 inactive
+| Follow up ->   | | View payments ->| | Review charges->| | View customers ->|
++----------------+ +-----------------+ +-----------------+ +------------------+
+
++ Needs attention ----------------------------+ + Payment summary ----------+
+| (!) 远航货运有限公司                          | | Unpaid invoices  $150.00  |
+|     $50.00 overdue · owes $150.00 in total  | |   Past due        $50.00  |
+| (!) 2 more customers past due               | |   Not due yet    $100.00  |
+| (o) 1 vehicle's monthly parking ends soon   | | Not billed yet   $280.00  |
+| (i) 1 customer has no phone or email        | | Collected this month      |
+| (i) 4 vehicles have no monthly parking      | |   Oct 1 to Oct 31 $300.00 |
+| View all past due customers ->              | | View payments ->          |
++---------------------------------------------+ +---------------------------+
+
++ Recent activity ----------------------------+ + Business snapshot --------+
+| $300.00 payment from 远航货运有限公司   Oct 1 | | Customers             5   |
+| Unit 12 added for 远航货运有限公司     Sep 2 | | Trucks                6   |
+| ...                                         | | Vehicles with monthly     |
+| View payments ->                            | |   parking             1   |
++---------------------------------------------+ | Customers past due    1   |
+                                                +---------------------------+
 ```
 
-- The hero card has a `primary.light` background. Every KPI shows its time context in caption text.
-- No chart in MVP 1. Reference A's chart is only for structure; we do not have that data.
+| Card | Data |
+| --- | --- |
+| Past due | `overdue_invoices` from `GET /reports/summary`; customer count is `total` from `GET /customers?overdue_only=true` |
+| Paid this month | `payments_received_this_month`; count is `total` from `GET /payments?from=<1st>&to=<today>&status=received` |
+| Not billed yet | `unbilled_parking` |
+| Active customers | `total` from `GET /customers` (active only); inactive is `total_customers` minus that |
+| Needs attention | Overdue customers sorted by overdue amount (top 3), then vehicles whose monthly parking ends within 30 days, active customers with no phone or email, and active vehicles without monthly parking. Built from `GET /customers` and `GET /vehicles` (first 100 records; the card says so if there are more). |
+| Payment summary | `outstanding_invoices`, `overdue_invoices`, not due yet (the difference), `unbilled_parking`, `payments_received_this_month` |
+| Recent activity | The 5 newest of: payments recorded or reversed, vehicles added, customers added or changed. Built from records already loaded; there is no activity API yet. |
+| Business snapshot | `total_customers`, `total_trucks`, vehicles whose monthly parking covers today, overdue customer count |
+
+- Mapping from the owner's sketch: there are no contracts, so "contracts expiring soon" became monthly parking ending within 30 days, and "active contracts" became vehicles with monthly parking. "Days overdue" is not shown because no endpoint returns the oldest due date; it should be added to the customer list (`oldest_overdue_on`) before it is shown. "Missing billing info" means no phone and no email.
+- Amounts owed and past due are red; past due has a red top edge on its card and the word "Past due", so color is never the only signal. Status icons in "Needs attention" sit next to words.
+- No chart in MVP 1.
 - Do not label monthly-parking vehicles as present on the lot.
+- Layout: the four headline cards sit four across from 900px and two by two below that. On phones (under 600px) they shrink: no icon, smaller numbers, and the whole card is the link, marked with an arrow. Content cards drop their icon tile on phones, and Recent activity puts each time under its line.
 
 ### 7.3 Customer list
 
@@ -694,3 +716,19 @@ After each phase: run typecheck, lint, tests, and build, and report what ran.
 Paste this, with this file and the linked specs attached:
 
 > Build a new React + TypeScript frontend for OceanLink, a truck parking lot billing app, from scratch in this repository. Follow `.github/UX_REBUILD.md` for the look, layout, screens, and build order, and treat `.github/REQUIREMENTS.md` and `.github/BACKEND_REQUIREMENTS.md` as the source of truth for business rules and the API. Build MVP 1 only. The main goal is readability for non-technical users: 16px base text, high contrast, no pale gray text, one clear primary action per screen, plain labels in English and Simplified Chinese. Use the blue sidebar shell and data-table style of reference A and the large page titles, icon-tile form cards, and tinted grouped fields of reference B, as described in section 2. Use only the approved stack. Do not invent endpoints, fields, or business rules. Never show a financial success before the server confirms it. Work phase by phase from section 13, and after each phase run typecheck, lint, tests, and build, then report what changed, what ran, and anything blocked.
+
+---
+
+## 16. Implementation notes (2026-10-31 build)
+
+The frontend was built from this document. Where the build differs, this is why:
+
+- **USDOT for individuals.** Section 7.5 shows the USDOT field for businesses only. Owner-operators (individuals) also have USDOT numbers in the real data, so the field is shown for both types.
+- **Customer list contact column.** Shows contact name, phone, and email on separate lines; phone is a tap-to-call link.
+- **Transactions filters.** The customer Transactions tab has search and a "Show" filter (everything, payments only, charges only). The date range filter was left out to keep the tab simple; the Payments page has the full date filters.
+- **Invoice source names.** The Transactions tab needs `source_type` on every invoice, so `GET /invoices` without `source_type` returns all issued invoices. Logged in BACKEND_LOGIC_CHANGES.md.
+- **"Owes after issuing" in Review monthly charges.** Applying credit does not change the net amount owed (it only moves credit onto the new invoices), so this number does not change when the credit box is ticked.
+- **Automatic payment allocation (owner approved 2026-10-31).** Recording a payment applies it to the customer's oldest unpaid issued invoices first, ordered by due date, issue date, then ID. Any remainder stays as customer credit. The account, customer list, and Overview refresh with reduced unpaid balances; reversing the payment restores them. Existing credit can still be applied when issuing monthly charges.
+- **Dashboard global search.** Search customers, vehicles, and payments from the Overview. Search is debounced 300ms and saved as `?q=` in the URL; Enter (the phone keyboard's Search key) searches at once and puts the keyboard away, Escape clears, and `/` focuses the box from anywhere on the dashboard. While a query is active the dashboard cards hide and a single results panel takes their place: a summary line ("4 matches for ..."), filter buttons for All, Customers, Vehicles, and Payments with counts (kept in the URL as `?in=`), and only the groups that have matches, side by side on desktop and stacked on phones. Each result is a full-width row with the matched text highlighted, the record's key facts, an Inactive pill where relevant, and a payment amount with a receipt action. "Show all N matches" appears only when a group is truncated at five. A single empty state suggests other identifiers and offers "Add customer". Include inactive customers and vehicles. Loading and retryable error states are per group. Use the existing list APIs, not a new search endpoint.
+- **Mock demo sessions survive a page reload** so a demo does not sign people out. Tests keep strict isolation.
+- **Not done yet:** Playwright end-to-end tests and automated `axe` checks (both need new dev dependencies, which need approval), and a screen-reader pass with NVDA or VoiceOver. Keyboard, focus, labels, landmarks, skip link, and contrast are built in and partly covered by tests.

@@ -1,403 +1,335 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useQuery } from '@tanstack/react-query';
 import Alert from '@mui/material/Alert';
+import AlertTitle from '@mui/material/AlertTitle';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
+import Grid from '@mui/material/Grid';
+import InputAdornment from '@mui/material/InputAdornment';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { useEffect, useRef, useState } from 'react';
-import { Controller, useForm, type FieldPath } from 'react-hook-form';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import type { Customer } from '@/features/customers/types';
-import { CustomerPicker } from '@/features/vehicles/CustomerPicker';
-import { useOnlineStatus } from '@/hooks/useOnlineStatus';
-import { isApiError } from '@/lib/api/errors';
-import { todayInTimeZone } from '@/lib/dates';
-import { formatMoney } from '@/lib/money';
-import { paymentsApi, usePaymentMutation } from './api';
-import {
-  PAYMENT_METHODS,
-  paymentFormSchema,
-  toPaymentWrite,
-  type Payment,
-  type PaymentFormValues,
-  type PaymentWrite,
-} from './model';
 
-export function RecordPaymentDialog({
-  customer,
-  onClose,
-  onSaved,
-}: {
+import { Money } from '@/components/Money';
+import { ReviewList } from '@/components/ReviewList';
+import { CustomerPicker } from '@/features/customers/CustomerPicker';
+import type { Customer } from '@/features/customers/types';
+import { useAuth } from '@/features/auth/useAuth';
+import { useIdempotencyKey } from '@/hooks/useIdempotencyKey';
+import { useLot } from '@/hooks/useLot';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { applyServerFieldErrors } from '@/lib/forms';
+import { hasCode, isUnknownOutcome, requestIdOf } from '@/lib/api/errors';
+import { formatDate, todayInTimeZone } from '@/lib/dates';
+import { refreshAfter } from '@/lib/queryKeys';
+
+import { paymentsApi } from './api';
+import { paymentFormSchema, toPaymentWrite, type PaymentFormValues } from './model';
+import { PAYMENT_METHODS, type Payment, type PaymentWrite } from './types';
+
+type Step = 'form' | 'review';
+type Outcome = { kind: 'unknown' | 'failed'; requestId?: string; messageKey: string } | null;
+
+interface Props {
+  // Filled in when opened from a customer page.
   customer?: Customer;
   onClose: () => void;
-  onSaved: (payment: Payment) => void;
-}) {
-  const { t } = useTranslation();
-  const lot = useQuery({ queryKey: ['lot', 'current'], queryFn: paymentsApi.lot });
-  let today: string | undefined;
-  try {
-    if (lot.data?.currency === 'USD') today = todayInTimeZone(lot.data.time_zone);
-  } catch {
-    today = undefined;
-  }
-  if (today)
-    return <ReceiptForm today={today} customer={customer} onClose={onClose} onSaved={onSaved} />;
-  return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="sm" aria-labelledby="payment-config-title">
-      <DialogTitle id="payment-config-title">{t('payments.record')}</DialogTitle>
-      <DialogContent>
-        {lot.isPending ? (
-          <Typography role="status">{t('app.loading')}</Typography>
-        ) : (
-          <Alert
-            severity="error"
-            action={<Button onClick={() => void lot.refetch()}>{t('app.retry')}</Button>}
-          >
-            {t('payments.lotUnavailable')}
-          </Alert>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>{t('common.cancel')}</Button>
-      </DialogActions>
-    </Dialog>
-  );
+  onRecorded: (payment: Payment) => void;
 }
 
-function ReceiptForm({
-  today,
-  customer,
-  onClose,
-  onSaved,
-}: {
-  today: string;
-  customer?: Customer;
-  onClose: () => void;
-  onSaved: (payment: Payment) => void;
-}) {
+const FIELDS = ['customer_id', 'amount', 'effective_on', 'method', 'reference', 'notes'] as const;
+
+export function RecordPaymentDialog({ customer: fixedCustomer, onClose, onRecorded }: Props) {
   const { t, i18n } = useTranslation();
+  const client = useQueryClient();
+  const { user } = useAuth();
   const online = useOnlineStatus();
-  const mutation = usePaymentMutation();
-  const [selected, setSelected] = useState<Customer | null>(customer ?? null);
-  const [review, setReview] = useState<PaymentWrite | null>(null);
-  const [errorKey, setErrorKey] = useState<string | null>(null);
-  const [requestId, setRequestId] = useState<string | undefined>();
-  const [uncertain, setUncertain] = useState(false);
-  const [discard, setDiscard] = useState(false);
-  const pending = useRef<{ key: string; body: PaymentWrite } | null>(null);
-  const inFlight = useRef(false);
+  const lot = useLot();
+  const key = useIdempotencyKey();
+  const [customer, setCustomer] = useState<Customer | null>(fixedCustomer ?? null);
+  const [step, setStep] = useState<Step>('form');
+  const [busy, setBusy] = useState(false);
+  const [outcome, setOutcome] = useState<Outcome>(null);
+  const [pending, setPending] = useState<PaymentWrite | null>(null);
+  const language = i18n.resolvedLanguage ?? 'en';
+  // "Today" is the lot's date; the form waits for it so a future date can be blocked.
+  const today = lot.data ? todayInTimeZone(lot.data.time_zone) : '';
+
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema(today)),
     defaultValues: {
-      customer_id: customer?.id ?? '',
+      customer_id: fixedCustomer?.id ?? '',
       amount: '',
-      effective_on: today,
+      effective_on: '',
       method: 'cash',
       reference: '',
       notes: '',
     },
   });
-  const busy = mutation.isPending;
-  const locked = busy || uncertain;
-  const errors = form.formState.errors;
+  const { errors } = form.formState;
+
   useEffect(() => {
-    if (!form.formState.isDirty && !uncertain) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [form.formState.isDirty, uncertain]);
-  const close = () => {
-    if (locked) return;
-    if (form.formState.isDirty) setDiscard(true);
-    else onClose();
+    if (today && !form.getValues('effective_on')) form.setValue('effective_on', today);
+  }, [today, form]);
+
+  // While a result is unknown the dialog stays open so nobody records it twice.
+  const locked = busy || outcome?.kind === 'unknown';
+  const message = (name: keyof PaymentFormValues) => {
+    const text = errors[name]?.message;
+    return text ? t(text) : undefined;
   };
-  const attempt = async (operation: { key: string; body: PaymentWrite }) => {
-    if (inFlight.current || !online) return;
-    inFlight.current = true;
-    setErrorKey(null);
-    setRequestId(undefined);
+
+  const send = async (body: PaymentWrite) => {
+    setBusy(true);
+    setOutcome(null);
     try {
-      const payment = await mutation.mutateAsync(() =>
-        paymentsApi.record(operation.body, operation.key),
-      );
-      pending.current = null;
-      setUncertain(false);
-      onSaved(payment);
+      const payment = await paymentsApi.record(body, key.current());
+      key.clear();
+      await refreshAfter(client, 'paymentChanged');
+      onRecorded(payment);
     } catch (error) {
-      setRequestId(isApiError(error) ? error.requestId : undefined);
-      const unknown = !isApiError(error) || error.status >= 500;
-      if (unknown) {
-        setUncertain(true);
-        setErrorKey('payments.unknown');
+      if (isUnknownOutcome(error)) {
+        setOutcome({
+          kind: 'unknown',
+          messageKey: 'payments.unknown',
+          requestId: requestIdOf(error),
+        });
       } else {
-        pending.current = null;
-        setUncertain(false);
-        setErrorKey(
-          error.status === 403
-            ? error.code === 'CSRF_REJECTED'
-              ? 'payments.csrf'
-              : 'payments.forbidden'
-            : error.status === 409
-              ? 'payments.keyConflict'
-              : 'payments.validationFailed',
-        );
-        const keys: Record<string, string> = {
-          customer_id: 'payments.customerRequired',
-          amount: 'payments.invalidAmount',
-          effective_on: 'payments.invalidDate',
-          reference: 'payments.referenceLong',
-          notes: 'payments.notesLong',
-        };
-        for (const field of Object.keys(error.fieldErrors ?? {})) {
-          const name = field === 'amount.amount' ? 'amount' : field;
-          if (keys[name])
-            form.setError(name as FieldPath<PaymentFormValues>, {
-              type: 'server',
-              message: keys[name],
-            });
-        }
+        key.clear();
+        const field = applyServerFieldErrors(error, form.setError, FIELDS, {}, 'form.invalid');
+        if (field) setStep('form');
+        setOutcome({
+          kind: 'failed',
+          messageKey: hasCode(error, 'IDEMPOTENCY_CONFLICT')
+            ? 'errors.duplicateRequest'
+            : 'payments.failed',
+          requestId: requestIdOf(error),
+        });
       }
     } finally {
-      inFlight.current = false;
+      setBusy(false);
     }
   };
-  const submit = form.handleSubmit(async (values) => {
-    if (pending.current || !online) return;
-    setReview(toPaymentWrite(values));
+
+  const review = form.handleSubmit((values) => {
+    setPending(toPaymentWrite(values));
+    setOutcome(null);
+    setStep('review');
   });
-  const confirmRecord = () => {
-    if (!review || pending.current || !online) return;
-    const operation = { key: crypto.randomUUID(), body: review };
-    pending.current = operation;
-    setReview(null);
-    void attempt(operation);
-  };
+
   return (
-    <>
-      <Dialog open fullWidth maxWidth="sm" onClose={close} aria-labelledby="record-payment-title">
-        <DialogTitle id="record-payment-title">
-          {t(review ? 'payments.reviewTitle' : 'payments.record')}
-        </DialogTitle>
-        <form onSubmit={review ? (event) => event.preventDefault() : submit} noValidate>
-          <DialogContent>
-            <Stack spacing={2}>
-              <Alert severity="info">{t('payments.offlineReceipt')}</Alert>
-              {!online && <Alert severity="warning">{t('payments.offline')}</Alert>}
-              {errorKey && (
-                <Alert severity={uncertain ? 'warning' : 'error'} role="alert">
-                  {t(errorKey)}
-                  {requestId && (
-                    <Typography variant="caption" component="div">
-                      {t('common.problemNumber', { id: requestId })}
-                    </Typography>
-                  )}
-                </Alert>
+    <Dialog
+      open
+      fullWidth
+      maxWidth="sm"
+      onClose={locked ? undefined : onClose}
+      aria-labelledby="record-payment-title"
+    >
+      <DialogTitle id="record-payment-title">
+        {t(step === 'form' ? 'payments.record' : 'payments.reviewTitle')}
+      </DialogTitle>
+      <DialogContent>
+        <Stack spacing={2.5} sx={{ pt: 0.5 }}>
+          {!online && <Alert severity="warning">{t('shell.offline')}</Alert>}
+          {lot.isError && (
+            <Alert
+              severity="error"
+              action={
+                <Button color="inherit" onClick={() => void lot.refetch()}>
+                  {t('common.retry')}
+                </Button>
+              }
+            >
+              {t('payments.lotUnavailable')}
+            </Alert>
+          )}
+          {outcome && (
+            <Alert severity={outcome.kind === 'unknown' ? 'warning' : 'error'}>
+              {outcome.kind === 'unknown' && <AlertTitle>{t('payments.unknownTitle')}</AlertTitle>}
+              {t(outcome.messageKey)}
+              {outcome.requestId && (
+                <Typography variant="caption" component="div">
+                  {t('errors.problemNumber', { id: outcome.requestId })}
+                </Typography>
               )}
-              {review ? (
-                <>
-                  <Alert severity="warning">{t('payments.recordReviewWarning')}</Alert>
-                  <Stack component="dl" spacing={0} sx={{ m: 0 }}>
-                    {[
-                      [
-                        t('payments.customer'),
-                        selected?.display_name ?? customer?.display_name ?? review.customer_id,
-                      ],
-                      [
-                        t('payments.amount'),
-                        formatMoney(review.amount.amount, i18n.resolvedLanguage ?? 'zh-CN'),
-                      ],
-                      [t('payments.date'), review.effective_on],
-                      [t('payments.method'), t(`account.methods.${review.method}`)],
-                      [t('payments.reference'), review.reference ?? t('common.notProvided')],
-                      [t('payments.notes'), review.notes ?? t('common.notProvided')],
-                    ].map(([label, value]) => (
-                      <Box
-                        key={label}
-                        sx={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          gap: 2,
-                          py: 1,
-                          borderBottom: 1,
-                          borderColor: 'divider',
-                        }}
-                      >
-                        <Typography component="dt" variant="body2" color="text.secondary">
-                          {label}
-                        </Typography>
-                        <Typography
-                          component="dd"
-                          variant="body2"
-                          sx={{ m: 0, textAlign: 'right', overflowWrap: 'anywhere' }}
-                        >
-                          {value}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Stack>
-                </>
-              ) : (
-                <>
-                  {customer ? (
-                    <Typography>{customer.display_name}</Typography>
-                  ) : (
-                    <Controller
-                      name="customer_id"
-                      control={form.control}
-                      render={({ field }) => (
-                        <CustomerPicker
-                          label={t('payments.customer')}
-                          required
-                          value={selected}
-                          onChange={(next) => {
-                            setSelected(next);
-                            field.onChange(next?.id ?? '');
-                          }}
-                          includeInactive
-                          disabled={locked}
-                          onBlur={field.onBlur}
-                          inputRef={field.ref}
-                          error={Boolean(errors.customer_id)}
-                          helperText={
-                            errors.customer_id?.message
-                              ? t(errors.customer_id.message)
-                              : t('payments.customerHint')
-                          }
-                        />
-                      )}
-                    />
-                  )}
-                  <TextField
-                    label={t('payments.amount')}
-                    required
-                    inputMode="decimal"
-                    fullWidth
-                    {...form.register('amount')}
-                    slotProps={{ input: { readOnly: locked }, inputLabel: { shrink: true } }}
-                    error={Boolean(errors.amount)}
-                    helperText={errors.amount?.message ? t(errors.amount.message) : undefined}
-                  />
-                  <TextField
-                    label={t('payments.date')}
-                    required
-                    type="date"
-                    fullWidth
-                    {...form.register('effective_on')}
-                    slotProps={{
-                      input: { readOnly: locked },
-                      inputLabel: { shrink: true },
-                      htmlInput: { max: today },
-                    }}
-                    error={Boolean(errors.effective_on)}
-                    helperText={
-                      errors.effective_on?.message ? t(errors.effective_on.message) : undefined
-                    }
-                  />
+            </Alert>
+          )}
+
+          {step === 'form' ? (
+            <Box component="form" id="payment-form" noValidate onSubmit={review}>
+              <Stack spacing={2.5}>
+                {fixedCustomer ? (
+                  <Box>
+                    <Typography color="text.secondary">{t('payments.fields.customer')}</Typography>
+                    <Typography sx={{ fontWeight: 600, fontSize: '1.0625rem' }}>
+                      {fixedCustomer.display_name}
+                    </Typography>
+                  </Box>
+                ) : (
                   <Controller
-                    name="method"
+                    name="customer_id"
                     control={form.control}
                     render={({ field }) => (
-                      <TextField
-                        {...field}
-                        select
-                        required
-                        label={t('payments.method')}
-                        disabled={locked}
-                      >
-                        {PAYMENT_METHODS.map((method) => (
-                          <MenuItem key={method} value={method}>
-                            {t(`account.methods.${method}`)}
-                          </MenuItem>
-                        ))}
-                      </TextField>
+                      <CustomerPicker
+                        value={customer}
+                        onChange={(next) => {
+                          setCustomer(next);
+                          field.onChange(next?.id ?? '');
+                        }}
+                        onBlur={field.onBlur}
+                        inputRef={field.ref}
+                        label={t('payments.fields.customer')}
+                        helperText={t('payments.fields.customerHint')}
+                        error={message('customer_id')}
+                        includeInactive
+                        autoFocus
+                      />
                     )}
                   />
-                  <TextField
-                    label={t('payments.reference')}
-                    fullWidth
-                    {...form.register('reference')}
-                    slotProps={{ input: { readOnly: locked }, inputLabel: { shrink: true } }}
-                    error={Boolean(errors.reference)}
-                    helperText={
-                      errors.reference?.message
-                        ? t(errors.reference.message)
-                        : t('payments.referenceHint')
-                    }
-                  />
-                  <TextField
-                    label={t('payments.notes')}
-                    fullWidth
-                    multiline
-                    minRows={2}
-                    {...form.register('notes')}
-                    slotProps={{ input: { readOnly: locked }, inputLabel: { shrink: true } }}
-                    error={Boolean(errors.notes)}
-                    helperText={errors.notes?.message ? t(errors.notes.message) : undefined}
-                  />
-                  <Typography>{t('payments.unallocatedHint')}</Typography>
-                </>
-              )}
-            </Stack>
-          </DialogContent>
-          <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
-            {review ? (
+                )}
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label={t('payments.fields.amount')}
+                      required
+                      inputMode="decimal"
+                      autoFocus={Boolean(fixedCustomer)}
+                      error={Boolean(errors.amount)}
+                      helperText={message('amount') ?? t('payments.fields.amountHint')}
+                      slotProps={{
+                        input: {
+                          startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                        },
+                      }}
+                      {...form.register('amount')}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label={t('payments.fields.date')}
+                      type="date"
+                      required
+                      disabled={!today}
+                      error={Boolean(errors.effective_on)}
+                      helperText={message('effective_on') ?? t('payments.fields.dateHint')}
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        htmlInput: { max: today || undefined },
+                      }}
+                      {...form.register('effective_on')}
+                    />
+                  </Grid>
+                </Grid>
+                <Controller
+                  name="method"
+                  control={form.control}
+                  render={({ field }) => (
+                    <TextField select label={t('payments.fields.method')} required {...field}>
+                      {PAYMENT_METHODS.map((method) => (
+                        <MenuItem key={method} value={method} sx={{ minHeight: 44 }}>
+                          {t(`payments.methods.${method}`)}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
+                />
+                <TextField
+                  label={`${t('payments.fields.reference')} (${t('form.optional')})`}
+                  error={Boolean(errors.reference)}
+                  helperText={message('reference') ?? t('payments.fields.referenceHint')}
+                  {...form.register('reference')}
+                />
+                <TextField
+                  label={`${t('payments.fields.notes')} (${t('form.optional')})`}
+                  multiline
+                  minRows={2}
+                  error={Boolean(errors.notes)}
+                  helperText={message('notes')}
+                  {...form.register('notes')}
+                />
+              </Stack>
+            </Box>
+          ) : (
+            pending && (
               <>
-                <Button onClick={() => setReview(null)} disabled={locked}>
-                  {t('payments.backToEdit')}
-                </Button>
-                <Button variant="contained" disabled={busy || !online} onClick={confirmRecord}>
-                  {t(busy ? 'common.saving' : 'payments.confirmRecord')}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button onClick={close} disabled={locked}>
-                  {t('common.cancel')}
-                </Button>
-                {uncertain ? (
-                  <Button
-                    variant="contained"
-                    disabled={busy || !online}
-                    onClick={() => {
-                      if (pending.current) void attempt(pending.current);
-                    }}
-                  >
-                    {t(busy ? 'payments.checking' : 'payments.checkResult')}
-                  </Button>
-                ) : (
-                  <Button type="submit" variant="contained" disabled={busy || !online}>
-                    {t(busy ? 'common.saving' : 'payments.review')}
-                  </Button>
+                <ReviewList
+                  rows={[
+                    {
+                      label: t('payments.fields.customer'),
+                      value: customer?.display_name ?? fixedCustomer?.display_name,
+                    },
+                    {
+                      label: t('payments.fields.amount'),
+                      value: <Money cents={pending.amount.amount} />,
+                    },
+                    {
+                      label: t('payments.fields.date'),
+                      value: formatDate(pending.effective_on, language),
+                    },
+                    {
+                      label: t('payments.fields.method'),
+                      value: t(`payments.methods.${pending.method}`),
+                    },
+                    {
+                      label: t('payments.fields.reference'),
+                      value: pending.reference ?? t('common.none'),
+                    },
+                    ...(pending.notes
+                      ? [{ label: t('payments.fields.notes'), value: pending.notes }]
+                      : []),
+                  ]}
+                />
+                <Alert severity="info">{t('payments.reviewNote')}</Alert>
+                {user?.role !== 'admin' && (
+                  <Typography color="text.secondary">{t('payments.onlyAdminReverses')}</Typography>
                 )}
               </>
+            )
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2.5, gap: 1, flexWrap: 'wrap' }}>
+        {step === 'form' ? (
+          <>
+            <Button onClick={onClose}>{t('common.cancel')}</Button>
+            <Button
+              type="submit"
+              form="payment-form"
+              variant="contained"
+              disabled={!online || !today}
+            >
+              {t('payments.review')}
+            </Button>
+          </>
+        ) : (
+          <>
+            {outcome?.kind !== 'unknown' && (
+              <Button onClick={() => setStep('form')} disabled={busy}>
+                {t('common.back')}
+              </Button>
             )}
-          </DialogActions>
-        </form>
-      </Dialog>
-      <Dialog
-        open={discard}
-        onClose={() => setDiscard(false)}
-        aria-labelledby="payment-discard-title"
-      >
-        <DialogTitle id="payment-discard-title">{t('common.unsavedTitle')}</DialogTitle>
-        <DialogContent>{t('common.unsavedBody')}</DialogContent>
-        <DialogActions>
-          <Button autoFocus onClick={() => setDiscard(false)}>
-            {t('common.stay')}
-          </Button>
-          <Button onClick={onClose}>{t('common.leave')}</Button>
-        </DialogActions>
-      </Dialog>
-    </>
+            <Button
+              variant="contained"
+              disabled={busy || !online || !pending}
+              onClick={() => pending && void send(pending)}
+            >
+              {busy
+                ? t('common.saving')
+                : outcome?.kind === 'unknown'
+                  ? t('payments.checkAgain')
+                  : t('payments.confirm')}
+            </Button>
+          </>
+        )}
+      </DialogActions>
+    </Dialog>
   );
 }

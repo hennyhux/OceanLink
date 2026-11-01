@@ -1,5 +1,8 @@
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
 import { http } from '@/lib/api/http';
 import { toQueryString, type Paged } from '@/lib/api/paging';
+import { keys, refreshAfter } from '@/lib/queryKeys';
 
 import type { Customer, CustomerListItem, CustomerListParams, CustomerWrite } from './types';
 
@@ -17,8 +20,48 @@ export const customersApi = {
 };
 
 export const customerKeys = {
-  all: ['customers'] as const,
-  lists: () => ['customers', 'list'] as const,
-  list: (params: CustomerListParams) => ['customers', 'list', params] as const,
-  detail: (id: string) => ['customers', 'detail', id] as const,
+  list: (params: CustomerListParams) => [...keys.customers, 'list', params] as const,
+  detail: (id: string) => [...keys.customers, 'detail', id] as const,
 };
+
+export function useCustomerList(params: CustomerListParams) {
+  return useQuery({
+    queryKey: customerKeys.list(params),
+    queryFn: ({ signal }) => customersApi.list(params, signal),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useCustomer(id: string | undefined) {
+  return useQuery({
+    queryKey: customerKeys.detail(id ?? ''),
+    queryFn: ({ signal }) => customersApi.get(id ?? '', signal),
+    enabled: Boolean(id),
+  });
+}
+
+export function useSaveCustomer(existing?: Customer) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<CustomerWrite>) =>
+      existing
+        ? customersApi.update(existing.id, existing.version, body)
+        : customersApi.create(body as CustomerWrite),
+    onSuccess: async (saved) => {
+      client.setQueryData(customerKeys.detail(saved.id), saved);
+      await refreshAfter(client, 'customerSaved');
+    },
+  });
+}
+
+export function useSetCustomerActive(customer: Customer) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (isActive: boolean) =>
+      customersApi.setActive(customer.id, customer.version, isActive),
+    onSuccess: async (saved) => {
+      client.setQueryData(customerKeys.detail(saved.id), saved);
+      await refreshAfter(client, 'customerStatus');
+    },
+  });
+}

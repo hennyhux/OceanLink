@@ -1,7 +1,6 @@
 type Listener = () => void;
 
-// Tiny event hook so the HTTP client can tell the auth layer about a 401
-// without importing React or the auth feature.
+// Lets the HTTP client tell the auth layer about a 401 without importing React.
 const listeners = new Set<Listener>();
 
 export const authEvents = {

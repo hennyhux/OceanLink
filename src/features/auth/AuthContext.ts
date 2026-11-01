@@ -1,24 +1,21 @@
 import { createContext } from 'react';
 
-import type { LoginRequest, User } from './types';
+import type { LoginRequest, SessionResponse, User } from './types';
 
-export type AuthStatus =
-  | 'checking' // first session check in flight
-  | 'authenticated'
-  | 'unauthenticated'
-  | 'unavailable'; // session check failed for a reason other than 401, user may still be signed in
+export type AuthStatus = 'loading' | 'signedIn' | 'signedOut' | 'error';
 
-export interface AuthContextValue {
+export interface AuthState {
   status: AuthStatus;
   user: User | null;
-  // Set when the user was signed in and the backend later said 401.
-  sessionExpired: boolean;
-  // Set when the last sign-out could not reach the server. The device is still signed out.
-  logoutServerFailed: boolean;
-  login: (credentials: LoginRequest) => Promise<void>;
+  session: SessionResponse['session'] | null;
+  // Why the person was signed out, shown on the sign-in screen.
+  signedOutReason: 'expired' | null;
+  login: (body: LoginRequest) => Promise<void>;
   logout: () => Promise<void>;
-  recheck: () => Promise<void>;
-  isLoggingOut: boolean;
+  retry: () => void;
+  keepAlive: () => Promise<void>;
+  // Ends the session locally after the idle limit passes.
+  expire: () => void;
 }
 
-export const AuthContext = createContext<AuthContextValue | null>(null);
+export const AuthContext = createContext<AuthState | null>(null);

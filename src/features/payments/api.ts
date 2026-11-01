@@ -1,65 +1,53 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+
 import { http } from '@/lib/api/http';
 import { toQueryString, type Paged } from '@/lib/api/paging';
-import type { Payment, PaymentFilters, PaymentWrite } from './model';
+import { config } from '@/lib/config';
+import { keys } from '@/lib/queryKeys';
 
-async function timedWrite<T>(
-  path: string,
-  body: unknown,
-  key: string,
-  version?: number,
-): Promise<T> {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 15000);
-  try {
-    return await http.post<T>(path, body, {
-      idempotencyKey: key,
-      ifMatchVersion: version,
-      signal: controller.signal,
-    });
-  } finally {
-    window.clearTimeout(timer);
-  }
-}
+import type { Payment, PaymentFilters, PaymentWrite } from './types';
 
-export const paymentKeys = {
-  all: ['payments'] as const,
-  list: (filters: PaymentFilters) => ['payments', 'list', filters] as const,
-  detail: (id: string) => ['payments', 'detail', id] as const,
-};
+const path = (id: string) => `/payments/${encodeURIComponent(id)}`;
+
 export const paymentsApi = {
   list: (filters: PaymentFilters, signal?: AbortSignal) =>
     http.get<Paged<Payment>>(`/payments${toQueryString({ ...filters })}`, { signal }),
-  get: (id: string, signal?: AbortSignal) =>
-    http.get<Payment>(`/payments/${encodeURIComponent(id)}`, { signal }),
-  record: (body: PaymentWrite, key: string) => timedWrite<Payment>('/payments', body, key),
+  get: (id: string, signal?: AbortSignal) => http.get<Payment>(path(id), { signal }),
+  record: (body: PaymentWrite, key: string) =>
+    http.post<Payment>('/payments', body, {
+      idempotencyKey: key,
+      timeoutMs: config.financialTimeoutMs,
+    }),
   reverse: (payment: Payment, reason: string, key: string) =>
-    timedWrite<Payment>(
-      `/payments/${encodeURIComponent(payment.id)}/reverse`,
+    http.post<Payment>(
+      `${path(payment.id)}/reverse`,
       { reason },
-      key,
-      payment.version,
+      {
+        idempotencyKey: key,
+        ifMatchVersion: payment.version,
+        timeoutMs: config.financialTimeoutMs,
+      },
     ),
-  lot: () => http.get<{ id: string; time_zone: string; currency: 'USD' }>('/lots/current'),
 };
 
-export function usePayments(filters: PaymentFilters) {
+export const paymentKeys = {
+  list: (filters: PaymentFilters) => [...keys.payments, 'list', filters] as const,
+  detail: (id: string) => [...keys.payments, 'detail', id] as const,
+};
+
+export function usePayments(filters: PaymentFilters, enabled = true) {
   return useQuery({
     queryKey: paymentKeys.list(filters),
     queryFn: ({ signal }) => paymentsApi.list(filters, signal),
+    placeholderData: keepPreviousData,
+    enabled,
   });
 }
-export function usePaymentMutation() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (operation: () => Promise<Payment>) => operation(),
-    onSuccess: async () => {
-      await Promise.all([
-        client.invalidateQueries({ queryKey: paymentKeys.all }),
-        client.invalidateQueries({ queryKey: ['ledger'] }),
-        client.invalidateQueries({ queryKey: ['overview'] }),
-        client.invalidateQueries({ queryKey: ['customers', 'list'] }),
-      ]);
-    },
+
+export function usePayment(id: string | undefined) {
+  return useQuery({
+    queryKey: paymentKeys.detail(id ?? ''),
+    queryFn: ({ signal }) => paymentsApi.get(id ?? '', signal),
+    enabled: Boolean(id),
   });
 }

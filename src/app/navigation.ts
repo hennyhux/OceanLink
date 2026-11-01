@@ -1,36 +1,49 @@
-import type { SvgIconComponent } from '@mui/icons-material';
 import AssessmentOutlinedIcon from '@mui/icons-material/AssessmentOutlined';
-import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
+import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
-import PeopleOutlinedIcon from '@mui/icons-material/PeopleOutlined';
+import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
-
-import type { StaffRole } from '@/features/auth/types';
+import type { SvgIconComponent } from '@mui/icons-material';
 
 export interface NavItem {
-  path: string;
+  to: string;
   labelKey: string;
   icon: SvgIconComponent;
-  roles: readonly StaffRole[];
 }
 
-export const ALL_STAFF: readonly StaffRole[] = ['operator', 'admin'];
-export const ADMIN_ONLY: readonly StaffRole[] = ['admin'];
+export interface NavGroup {
+  labelKey: string;
+  adminOnly?: boolean;
+  items: NavItem[];
+}
 
-// Order matches REQUIREMENTS.md section 4.2.
-export const NAV_ITEMS: readonly NavItem[] = [
-  { path: '/', labelKey: 'nav.overview', icon: HomeOutlinedIcon, roles: ALL_STAFF },
-  { path: '/customers', labelKey: 'nav.customers', icon: PeopleOutlinedIcon, roles: ALL_STAFF },
+export const NAV_GROUPS: NavGroup[] = [
   {
-    path: '/vehicles',
-    labelKey: 'nav.vehicles',
-    icon: LocalShippingOutlinedIcon,
-    roles: ALL_STAFF,
+    labelKey: 'nav.dailyWork',
+    items: [
+      { to: '/', labelKey: 'nav.overview', icon: DashboardOutlinedIcon },
+      { to: '/customers', labelKey: 'nav.customers', icon: PeopleAltOutlinedIcon },
+      { to: '/vehicles', labelKey: 'nav.vehicles', icon: LocalShippingOutlinedIcon },
+      { to: '/payments', labelKey: 'nav.payments', icon: PaymentsOutlinedIcon },
+    ],
   },
-  { path: '/invoices', labelKey: 'nav.invoices', icon: ReceiptLongOutlinedIcon, roles: ALL_STAFF },
-  { path: '/payments', labelKey: 'nav.payments', icon: PaymentsOutlinedIcon, roles: ALL_STAFF },
-  { path: '/reports', labelKey: 'nav.reports', icon: AssessmentOutlinedIcon, roles: ALL_STAFF },
-  { path: '/settings', labelKey: 'nav.settings', icon: SettingsOutlinedIcon, roles: ADMIN_ONLY },
+  {
+    labelKey: 'nav.billing',
+    items: [
+      { to: '/invoices', labelKey: 'nav.invoices', icon: ReceiptLongOutlinedIcon },
+      { to: '/reports', labelKey: 'nav.reports', icon: AssessmentOutlinedIcon },
+    ],
+  },
+  {
+    labelKey: 'nav.admin',
+    adminOnly: true,
+    items: [{ to: '/settings', labelKey: 'nav.settings', icon: SettingsOutlinedIcon }],
+  },
 ];
+
+export function isActivePath(pathname: string, to: string): boolean {
+  if (to === '/') return pathname === '/';
+  return pathname === to || pathname.startsWith(`${to}/`);
+}

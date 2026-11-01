@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^& '\\.\\\\node_modules\\\\\\.bin\\\\vitest\\.cmd' run src\\\\features\\\\vehicles\\\\parking\\.test\\.tsx src\\\\features\\\\vehicles\\\\parkingModel\\.test\\.ts src\\\\mocks\\\\monthlyCharges\\.test\\.ts src\\\\features\\\\customers\\\\customers\\.test\\.tsx src\\\\features\\\\billing\\\\billing\\.test\\.ts src\\\\features\\\\billing\\\\billingFlows\\.test\\.tsx$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

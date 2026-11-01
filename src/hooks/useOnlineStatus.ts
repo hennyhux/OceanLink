@@ -1,14 +1,15 @@
 import { useSyncExternalStore } from 'react';
 
-function subscribe(listener: () => void) {
-  window.addEventListener('online', listener);
-  window.addEventListener('offline', listener);
+function subscribe(callback: () => void): () => void {
+  window.addEventListener('online', callback);
+  window.addEventListener('offline', callback);
   return () => {
-    window.removeEventListener('online', listener);
-    window.removeEventListener('offline', listener);
+    window.removeEventListener('online', callback);
+    window.removeEventListener('offline', callback);
   };
 }
-export function useOnlineStatus() {
+
+export function useOnlineStatus(): boolean {
   return useSyncExternalStore(
     subscribe,
     () => navigator.onLine,

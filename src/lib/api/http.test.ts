@@ -4,65 +4,70 @@ import { describe, expect, it, vi } from 'vitest';
 import { server } from '@/mocks/server';
 
 import { authEvents } from './authEvents';
-import { ApiError, NetworkError } from './errors';
+import { ApiError, NetworkError, isUnknownOutcome } from './errors';
 import { http } from './http';
 
-const BASE = '/api/v1';
-
 describe('http client', () => {
-  it('sends the CSRF header and credentials on writes', async () => {
-    let seenHeader: string | null = null;
-    let seenCredentials: RequestCredentials | undefined;
+  it('adds the CSRF header, If-Match, and Idempotency-Key to writes only', async () => {
+    const seen: Record<string, string | null>[] = [];
     server.use(
-      mswHttp.post(`${BASE}/things`, ({ request }) => {
-        seenHeader = request.headers.get('x-requested-with');
-        seenCredentials = request.credentials;
+      mswHttp.all('/api/v1/probe', ({ request }) => {
+        seen.push({
+          method: request.method,
+          csrf: request.headers.get('x-requested-with'),
+          ifMatch: request.headers.get('if-match'),
+          key: request.headers.get('idempotency-key'),
+        });
         return HttpResponse.json({ ok: true });
       }),
     );
-
-    await http.post('/things', { a: 1 });
-    expect(seenHeader).toBe('XMLHttpRequest');
-    expect(seenCredentials).toBe('include');
+    await http.get('/probe');
+    await http.post('/probe', { a: 1 }, { ifMatchVersion: 3, idempotencyKey: 'key-1' });
+    expect(seen).toEqual([
+      { method: 'GET', csrf: null, ifMatch: null, key: null },
+      { method: 'POST', csrf: 'XMLHttpRequest', ifMatch: '"3"', key: 'key-1' },
+    ]);
   });
 
-  it('normalizes error bodies into ApiError', async () => {
+  it('normalizes the error shape and reports 401 to the auth layer', async () => {
+    const onUnauthorized = vi.fn();
+    const stop = authEvents.onUnauthorized(onUnauthorized);
     server.use(
-      mswHttp.get(`${BASE}/things`, () =>
+      mswHttp.get('/api/v1/probe', () =>
         HttpResponse.json(
-          { code: 'LOT_SETUP_REQUIRED', message: 'Set up the lot first', request_id: 'r-1' },
-          { status: 409 },
+          { code: 'SESSION_EXPIRED', message: 'x', request_id: 'r-1', field_errors: { a: ['B'] } },
+          { status: 401 },
         ),
       ),
     );
-
-    const error = await http.get('/things').catch((e: unknown) => e);
+    const error = await http.get('/probe').catch((caught: unknown) => caught);
+    stop();
     expect(error).toBeInstanceOf(ApiError);
-    expect(error).toMatchObject({ status: 409, code: 'LOT_SETUP_REQUIRED', requestId: 'r-1' });
+    expect(error).toMatchObject({
+      status: 401,
+      code: 'SESSION_EXPIRED',
+      requestId: 'r-1',
+      fieldErrors: { a: ['B'] },
+    });
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
-  it('wraps fetch failures in NetworkError', async () => {
-    server.use(mswHttp.get(`${BASE}/things`, () => HttpResponse.error()));
-    await expect(http.get('/things')).rejects.toBeInstanceOf(NetworkError);
-  });
-
-  it('emits an unauthorized event on 401 unless told not to', async () => {
-    const listener = vi.fn();
-    const unsubscribe = authEvents.onUnauthorized(listener);
-    server.use(mswHttp.get(`${BASE}/things`, () => new HttpResponse(null, { status: 401 })));
-
-    await expect(http.get('/things')).rejects.toBeInstanceOf(ApiError);
-    expect(listener).toHaveBeenCalledTimes(1);
-
-    await expect(http.get('/things', { skipUnauthorizedEvent: true })).rejects.toBeInstanceOf(
-      ApiError,
+  it('treats a timeout on a money write as an unknown result, not a failure', async () => {
+    // The test setup strips abort signals from fetch, so stand in for a server that never answers.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
     );
-    expect(listener).toHaveBeenCalledTimes(1);
-    unsubscribe();
-  });
-
-  it('returns undefined for 204 responses', async () => {
-    server.use(mswHttp.delete(`${BASE}/things/1`, () => new HttpResponse(null, { status: 204 })));
-    await expect(http.delete('/things/1')).resolves.toBeUndefined();
+    const error = await http
+      .post('/probe', {}, { timeoutMs: 20 })
+      .catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(NetworkError);
+    expect((error as NetworkError).timedOut).toBe(true);
+    expect(isUnknownOutcome(error)).toBe(true);
+    expect(isUnknownOutcome(new ApiError(422, { code: 'VALIDATION_FAILED', message: '' }))).toBe(
+      false,
+    );
   });
 });

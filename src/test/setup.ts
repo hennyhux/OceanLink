@@ -1,15 +1,15 @@
 import '@testing-library/jest-dom/vitest';
 
-import { HttpResponse, http } from 'msw';
-import { afterAll, afterEach, beforeAll, beforeEach } from 'vitest';
+import { configure } from '@testing-library/react';
+import { afterAll, afterEach, beforeAll } from 'vitest';
 
-import { resetMockCustomers } from '@/mocks/customerHandlers';
+import { resetDb } from '@/mocks/db';
 import { server } from '@/mocks/server';
-import { resetMockVehicles } from '@/mocks/vehicleHandlers';
-import { resetMockPayments } from '@/mocks/paymentStore';
 
-// Vitest swaps in jsdom's AbortController/AbortSignal, but fetch and Request are Node's and
-// reject a foreign signal. Drop signals in tests; cancellation is not under test here.
+// Pages load lazily; the first load in a test file can take more than a second.
+configure({ asyncUtilTimeout: 4000 });
+
+// Node's fetch rejects jsdom's AbortSignal. Drop signals in tests; cancellation is not under test.
 const NativeRequest = globalThis.Request;
 class TestRequest extends NativeRequest {
   constructor(input: RequestInfo | URL, init?: RequestInit) {
@@ -17,31 +17,20 @@ class TestRequest extends NativeRequest {
   }
 }
 globalThis.Request = TestRequest;
-
 const nativeFetch = globalThis.fetch;
 globalThis.fetch = (input, init) =>
   nativeFetch(input, init ? { ...init, signal: undefined } : init);
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-beforeEach(() => {
-  // MSW keeps Set-Cookie values between tests. Start every test signed out unless it says otherwise.
-  server.use(
-    http.get('/api/v1/auth/session', () =>
-      HttpResponse.json({ code: 'SESSION_EXPIRED', message: 'Not signed in' }, { status: 401 }),
-    ),
-  );
-});
 afterEach(() => {
   server.resetHandlers();
-  resetMockCustomers();
-  resetMockVehicles();
-  resetMockPayments();
+  // A fresh database also drops every session, so each test starts signed out.
+  resetDb();
   window.localStorage.clear();
 });
 afterAll(() => server.close());
 
-// jsdom does not implement matchMedia, which MUI's useMediaQuery needs.
-// Match min-width queries so tests render the desktop layout by default.
+// jsdom has no matchMedia. Match min-width queries so tests get the wide desktop layout.
 if (!window.matchMedia) {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
@@ -57,3 +46,5 @@ if (!window.matchMedia) {
     }),
   });
 }
+
+window.scrollTo = () => {};

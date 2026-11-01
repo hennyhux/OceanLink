@@ -1,69 +1,58 @@
 import { useQuery } from '@tanstack/react-query';
+
 import { http } from '@/lib/api/http';
 import { toQueryString, type Paged } from '@/lib/api/paging';
-import type { Money } from '@/lib/money';
-import type { BillingRun } from './model';
-import type { ManualDebitInvoice, ManualDebitWrite } from './manualDebitModel';
+import { config } from '@/lib/config';
+import { keys } from '@/lib/queryKeys';
 
-export interface CustomerLedger {
-  as_of: string;
-  outstanding: Money;
-  overdue: Money;
-  unapplied_credit: Money;
-  net_balance: Money;
-  monthly_parking?: Money;
-  unbilled_parking?: Money;
-  last_payment: { id: string; amount: Money; effective_on: string; method: string } | null;
-}
+import type {
+  BillingRun,
+  CustomerLedger,
+  Invoice,
+  InvoiceListParams,
+  ManualChargeWrite,
+} from './types';
 
-export const billingKeys = { ledger: (id: string) => ['ledger', id] as const };
-export interface ManualDebitFilters {
-  q?: string;
-  from?: string;
-  to?: string;
-  page?: number;
-  page_size?: number;
-}
+// Money writes reuse one key per intended operation and time out into an unknown result.
+const financial = (key: string) => ({ idempotencyKey: key, timeoutMs: config.financialTimeoutMs });
+
 export const billingApi = {
+  ledger: (customerId: string, signal?: AbortSignal) =>
+    http.get<CustomerLedger>(`/customers/${encodeURIComponent(customerId)}/ledger`, { signal }),
   preview: (customerId: string, throughDate: string) =>
     http.post<BillingRun>('/billing-runs/preview', {
       customer_id: customerId,
       through_date: throughDate,
     }),
-  issue: async (id: string, applyCredit: boolean, key: string) => {
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 15000);
-    try {
-      return await http.post<BillingRun>(
-        `/billing-runs/${encodeURIComponent(id)}/issue`,
-        { apply_credit: applyCredit },
-        { idempotencyKey: key, signal: controller.signal },
-      );
-    } finally {
-      window.clearTimeout(timer);
-    }
-  },
-  createManualDebit: (body: ManualDebitWrite, key: string) =>
-    http.post<ManualDebitInvoice>('/invoices', body, { idempotencyKey: key }),
-  issueManualDebit: (id: string, key: string) =>
-    http.post<ManualDebitInvoice>(`/invoices/${encodeURIComponent(id)}/issue`, undefined, {
-      idempotencyKey: key,
-    }),
-  manualDebits: (customerId: string, filters: ManualDebitFilters, signal?: AbortSignal) =>
-    http.get<Paged<ManualDebitInvoice>>(
-      `/invoices${toQueryString({
-        customer_id: customerId,
-        source_type: 'manual',
-        page: 1,
-        page_size: 20,
-        ...filters,
-      })}`,
-      { signal },
+  issue: (runId: string, applyCredit: boolean, key: string) =>
+    http.post<BillingRun>(
+      `/billing-runs/${encodeURIComponent(runId)}/issue`,
+      { apply_credit: applyCredit },
+      financial(key),
     ),
+  invoices: (params: InvoiceListParams, signal?: AbortSignal) =>
+    http.get<Paged<Invoice>>(`/invoices${toQueryString({ ...params })}`, { signal }),
+  createCharge: (body: ManualChargeWrite, key: string) =>
+    http.post<Invoice>('/invoices', body, financial(key)),
+  issueCharge: (id: string, key: string) =>
+    http.post<Invoice>(`/invoices/${encodeURIComponent(id)}/issue`, undefined, financial(key)),
 };
-export function useCustomerLedger(id: string) {
+
+export const billingKeys = {
+  ledger: (customerId: string) => [...keys.ledger, customerId] as const,
+  invoices: (params: InvoiceListParams) => [...keys.invoices, params] as const,
+};
+
+export function useLedger(customerId: string) {
   return useQuery({
-    queryKey: billingKeys.ledger(id),
-    queryFn: () => http.get<CustomerLedger>(`/customers/${encodeURIComponent(id)}/ledger`),
+    queryKey: billingKeys.ledger(customerId),
+    queryFn: ({ signal }) => billingApi.ledger(customerId, signal),
+  });
+}
+
+export function useInvoices(params: InvoiceListParams) {
+  return useQuery({
+    queryKey: billingKeys.invoices(params),
+    queryFn: ({ signal }) => billingApi.invoices(params, signal),
   });
 }

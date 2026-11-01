@@ -1,69 +1,59 @@
-import Link from '@mui/material/Link';
 import { useTranslation } from 'react-i18next';
-import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 
-import { useCustomer } from '@/features/customers/queries';
-import { ErrorState } from '@/components/ErrorState';
-import type { FlashState } from '@/components/FlashMessage';
-import { LoadingState } from '@/components/LoadingState';
+import { useBreadcrumbs } from '@/components/breadcrumbs';
 import { PageHeader } from '@/components/PageHeader';
-import { isNotFound } from '@/lib/api/errors';
+import { ErrorState, LoadingState } from '@/components/States';
+import { useToast } from '@/components/toastContext';
+import { useCustomer } from '@/features/customers/api';
+import { hasStatus, requestIdOf } from '@/lib/api/errors';
 import { safeReturnTo } from '@/lib/navigation';
 
-import { emptyVehicleForm, formToCreate } from './formModel';
-import { useCreateVehicle } from './queries';
+import { useCreateVehicle } from './api';
+import { emptyVehicleForm, formToCreate } from './model';
 import { VehicleForm } from './VehicleForm';
 
-export function VehicleNewPage() {
+export default function VehicleNewPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const customerId = searchParams.get('customer_id') ?? '';
-  const returnTo = safeReturnTo(searchParams.get('returnTo'), '/vehicles');
+  const toast = useToast();
+  const [params] = useSearchParams();
+  const customerId = params.get('customer_id') ?? '';
+  const back = safeReturnTo(params.get('returnTo'), '/vehicles');
   const create = useCreateVehicle();
-  // When the owner is already known (from the customer page) it is filled in and shown first.
+  // When the owner is known (coming from a customer page) it is filled in.
   const customerQuery = useCustomer(customerId || undefined);
+  useBreadcrumbs([{ label: t('nav.vehicles'), to: '/vehicles' }, { label: t('vehicles.add') }]);
 
-  if (customerId && customerQuery.isPending) {
-    return <LoadingState label={t('app.loading')} />;
-  }
-
+  if (customerId && customerQuery.isPending) return <LoadingState rows={6} />;
   if (customerId && customerQuery.isError) {
-    const notFound = isNotFound(customerQuery.error);
+    const missing = hasStatus(customerQuery.error, 404);
     return (
       <ErrorState
-        title={notFound ? t('customers.notFoundTitle') : t('common.loadFailedTitle')}
-        body={notFound ? t('customers.notFoundBody') : t('common.loadFailedBody')}
-        actionLabel={notFound ? t('vehicles.backToList') : t('app.retry')}
-        onAction={() =>
-          notFound ? void navigate('/vehicles', { replace: true }) : void customerQuery.refetch()
-        }
+        title={missing ? t('customers.notFoundTitle') : undefined}
+        body={missing ? t('customers.notFoundBody') : undefined}
+        onRetry={missing ? undefined : () => void customerQuery.refetch()}
+        requestId={requestIdOf(customerQuery.error)}
       />
     );
   }
-
   const customer = customerId ? (customerQuery.data ?? null) : null;
 
   return (
     <>
-      <Link
-        component={RouterLink}
-        to={returnTo}
-        underline="hover"
-        sx={{ display: 'inline-block', mb: 1 }}
-      >
-        ← {t('common.back')}
-      </Link>
-      <PageHeader title={t('vehicles.newTitle')} />
+      <PageHeader
+        title={t('vehicles.add')}
+        subtitle={customer ? t('vehicles.addFor', { name: customer.display_name }) : undefined}
+      />
       <VehicleForm
         defaultValues={emptyVehicleForm(customer?.id ?? '', customer?.usdot_number ?? null)}
         initialCustomer={customer}
         submitLabel={t('vehicles.add')}
-        onCancel={() => void navigate(returnTo)}
+        onCancel={() => void navigate(back)}
         onSubmit={async (values) => {
-          await create.mutateAsync(formToCreate(values));
-          const state: FlashState = { flash: { messageKey: 'vehicles.created' } };
-          void navigate(returnTo, { replace: true, state });
+          await create.mutateAsync(formToCreate(values, t('parking.firstReason')));
+          toast.success(t('vehicles.created'));
+          void navigate(back, { replace: true });
         }}
       />
     </>

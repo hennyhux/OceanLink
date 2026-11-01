@@ -1,209 +1,140 @@
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
-import MenuIcon from '@mui/icons-material/Menu';
+import WifiOffOutlinedIcon from '@mui/icons-material/WifiOffOutlined';
 import Alert from '@mui/material/Alert';
-import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Container from '@mui/material/Container';
-import Divider from '@mui/material/Divider';
 import Drawer from '@mui/material/Drawer';
-import IconButton from '@mui/material/IconButton';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemButton from '@mui/material/ListItemButton';
-import ListItemIcon from '@mui/material/ListItemIcon';
-import ListItemText from '@mui/material/ListItemText';
-import Toolbar from '@mui/material/Toolbar';
-import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NavLink, Outlet, useNavigate } from 'react-router';
+import { Outlet, useLocation } from 'react-router';
 
-import { LanguageSwitch } from '@/components/LanguageSwitch';
-import { useAuth } from '@/features/auth/useAuth';
-import { config } from '@/lib/config';
+import { BreadcrumbContext, type Crumb } from '@/components/breadcrumbs';
+import { ErrorState } from '@/components/States';
+import { SessionKeeper } from '@/features/auth/SessionKeeper';
+import { useLot } from '@/hooks/useLot';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { visuallyHidden } from '@/lib/a11y';
+import { hasCode } from '@/lib/api/errors';
 
-import { NAV_ITEMS } from './navigation';
-
-const DRAWER_WIDTH = 248;
+import { Sidebar } from './Sidebar';
+import { tokens } from './theme';
+import { TopBar } from './TopBar';
 
 export function AppShell() {
   const { t } = useTranslation();
   const theme = useTheme();
-  const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
-  const navigate = useNavigate();
-  const { user, logout, isLoggingOut } = useAuth();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  // Full sidebar at 1200px+, icon rail from 900px, drawer below that.
+  const wide = useMediaQuery(theme.breakpoints.up('lg'));
+  const medium = useMediaQuery(theme.breakpoints.up('md'));
+  const online = useOnlineStatus();
+  const lot = useLot();
+  const { pathname } = useLocation();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [crumbs, setCrumbs] = useState<Crumb[]>([]);
+  const mainRef = useRef<HTMLElement>(null);
+  const firstRender = useRef(true);
 
-  const visibleItems = NAV_ITEMS.filter((item) => user && item.roles.includes(user.role));
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } finally {
-      // The login page shows a note if the server call failed.
-      void navigate('/login', { replace: true });
+  // Move focus to the new page so keyboard and screen reader users start at the top.
+  useEffect(() => {
+    setDrawerOpen(false);
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
     }
-  };
+    mainRef.current?.focus({ preventScroll: true });
+    window.scrollTo?.(0, 0);
+  }, [pathname]);
 
-  const navigation = (
-    <Box component="nav" id="main-navigation" aria-label={t('nav.menu')} sx={{ pt: 1 }}>
-      <List>
-        {visibleItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <ListItem key={item.path} disablePadding>
-              <ListItemButton
-                component={NavLink}
-                to={item.path}
-                end={item.path === '/'}
-                onClick={() => setMobileOpen(false)}
-                sx={{
-                  mx: 1,
-                  borderRadius: 2,
-                  '&.active': {
-                    bgcolor: 'primary.main',
-                    color: 'primary.contrastText',
-                    '& .MuiListItemIcon-root': { color: 'inherit' },
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 40 }}>
-                  <Icon aria-hidden />
-                </ListItemIcon>
-                <ListItemText primary={t(item.labelKey)} />
-              </ListItemButton>
-            </ListItem>
-          );
-        })}
-        {!isDesktop && user && (
-          <>
-            <Divider sx={{ my: 1 }} />
-            <ListItem disablePadding>
-              <ListItemButton
-                onClick={() => {
-                  setMobileOpen(false);
-                  void handleLogout();
-                }}
-                disabled={isLoggingOut}
-                sx={{ mx: 1, borderRadius: 2 }}
-              >
-                <ListItemIcon sx={{ minWidth: 40 }}>
-                  <LogoutOutlinedIcon aria-hidden />
-                </ListItemIcon>
-                <ListItemText primary={isLoggingOut ? t('auth.signingOut') : t('auth.signOut')} />
-              </ListItemButton>
-            </ListItem>
-          </>
-        )}
-      </List>
-    </Box>
-  );
+  const lotMissing = hasCode(lot.error, 'LOT_SETUP_REQUIRED');
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
-      <Button
-        href="#main-content"
-        sx={{
-          position: 'absolute',
-          left: -9999,
-          '&:focus': { left: 8, top: 8, zIndex: (th) => th.zIndex.tooltip },
-        }}
-      >
-        {t('app.skipToContent')}
-      </Button>
-
-      <AppBar
-        position="fixed"
-        color="inherit"
-        elevation={0}
-        sx={{ borderBottom: 1, borderColor: 'divider', zIndex: theme.zIndex.drawer + 1 }}
-      >
-        <Toolbar sx={{ gap: 1 }}>
-          {!isDesktop && (
-            <IconButton
-              edge="start"
-              aria-label={mobileOpen ? t('app.closeMenu') : t('app.openMenu')}
-              aria-expanded={mobileOpen}
-              aria-controls="main-navigation"
-              onClick={() => setMobileOpen((open) => !open)}
-            >
-              <MenuIcon />
-            </IconButton>
-          )}
-          <Typography
-            component="div"
-            variant="h6"
-            fontWeight={700}
-            noWrap
-            sx={{ flexGrow: 1, minWidth: 0, fontSize: { xs: '1rem', sm: '1.25rem' } }}
-          >
-            {t('app.name')}
-          </Typography>
-          <LanguageSwitch />
-          {user && (
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              noWrap
-              sx={{ display: { xs: 'none', md: 'block' }, ml: 1 }}
-            >
-              {t('auth.signedInAs', { name: user.name })}
-            </Typography>
-          )}
-          {isDesktop && user && (
-            <Button
-              onClick={() => void handleLogout()}
-              disabled={isLoggingOut}
-              startIcon={<LogoutOutlinedIcon />}
-              color="inherit"
-              sx={{ whiteSpace: 'nowrap' }}
-            >
-              {isLoggingOut ? t('auth.signingOut') : t('auth.signOut')}
-            </Button>
-          )}
-        </Toolbar>
-      </AppBar>
-
-      {isDesktop ? (
-        <Drawer
-          variant="permanent"
+    <BreadcrumbContext.Provider value={setCrumbs}>
+      <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
+        <Box
+          component="a"
+          href="#main"
           sx={{
-            width: DRAWER_WIDTH,
-            flexShrink: 0,
-            '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' },
+            ...visuallyHidden,
+            '&:focus': {
+              clip: 'auto',
+              width: 'auto',
+              height: 'auto',
+              margin: 0,
+              zIndex: 2000,
+              top: 8,
+              left: 8,
+              px: 2,
+              py: 1,
+              bgcolor: 'background.paper',
+              borderRadius: 2,
+              fontWeight: 600,
+            },
           }}
         >
-          <Toolbar />
-          {navigation}
-        </Drawer>
-      ) : (
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={() => setMobileOpen(false)}
-          ModalProps={{ keepMounted: true }}
-          sx={{ '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' } }}
-        >
-          <Toolbar />
-          <Divider />
-          {navigation}
-        </Drawer>
-      )}
+          {t('shell.skipToMain')}
+        </Box>
 
-      <Box component="main" id="main-content" tabIndex={-1} sx={{ flexGrow: 1, minWidth: 0 }}>
-        <Toolbar />
-        {config.mocksEnabled && (
-          <Alert severity="warning" square sx={{ justifyContent: 'center' }}>
-            {t('dev.mockBanner')}
-          </Alert>
+        {medium && (
+          <Box
+            component="aside"
+            sx={{
+              width: wide ? tokens.sidebarWidth : tokens.railWidth,
+              flexShrink: 0,
+              position: 'sticky',
+              top: 0,
+              height: '100vh',
+            }}
+          >
+            <Sidebar rail={!wide} />
+          </Box>
         )}
-        <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 4 } }}>
-          <Outlet />
-        </Container>
+        <Drawer
+          open={!wide && drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          ModalProps={{ keepMounted: false }}
+          slotProps={{ paper: { sx: { border: 0 } } }}
+        >
+          <Sidebar onNavigate={() => setDrawerOpen(false)} />
+        </Drawer>
+
+        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <TopBar crumbs={crumbs} showMenuButton={!wide} onMenu={() => setDrawerOpen(true)} />
+          {!online && (
+            <Alert
+              severity="warning"
+              icon={<WifiOffOutlinedIcon />}
+              role="status"
+              sx={{ borderRadius: 0, borderBottom: 1, borderColor: 'warning.main' }}
+            >
+              {t('shell.offline')}
+            </Alert>
+          )}
+          <Box
+            component="main"
+            id="main"
+            ref={mainRef}
+            tabIndex={-1}
+            sx={{
+              flex: 1,
+              width: '100%',
+              maxWidth: 1280,
+              mx: 'auto',
+              px: { xs: 2, sm: 3, lg: 4 },
+              pt: { xs: 2.5, sm: 4 },
+              // Room so the floating action button never covers the last row.
+              pb: { xs: 12, md: 6 },
+              outline: 'none',
+            }}
+          >
+            {lotMissing ? (
+              <ErrorState title={t('errors.lotSetupTitle')} body={t('errors.lotSetupBody')} />
+            ) : (
+              <Outlet />
+            )}
+          </Box>
+        </Box>
+        <SessionKeeper />
       </Box>
-    </Box>
+    </BreadcrumbContext.Provider>
   );
 }

@@ -1,4 +1,4 @@
-// Error contract from REQUIREMENTS.md section 12.3.
+// Error shape from REQUIREMENTS.md section 12.3.
 export interface ApiErrorBody {
   code: string;
   message: string;
@@ -12,7 +12,6 @@ export class ApiError extends Error {
   readonly code: string;
   readonly requestId: string | undefined;
   readonly fieldErrors: Record<string, string[]> | undefined;
-  readonly details: Record<string, unknown> | undefined;
 
   constructor(status: number, body: Partial<ApiErrorBody> | undefined) {
     super(body?.message ?? `Request failed with status ${status}`);
@@ -21,16 +20,18 @@ export class ApiError extends Error {
     this.code = body?.code ?? `HTTP_${status}`;
     this.requestId = body?.request_id;
     this.fieldErrors = body?.field_errors;
-    this.details = body?.details;
   }
 }
 
-// The request never reached the server or no response came back.
+// The request never reached the server, timed out, or no response came back.
 export class NetworkError extends Error {
-  constructor(cause?: unknown) {
-    super('Network request failed');
+  readonly timedOut: boolean;
+
+  constructor(cause?: unknown, timedOut = false) {
+    super(timedOut ? 'Request timed out' : 'Network request failed');
     this.name = 'NetworkError';
     this.cause = cause;
+    this.timedOut = timedOut;
   }
 }
 
@@ -42,25 +43,19 @@ export function isNetworkError(error: unknown): error is NetworkError {
   return error instanceof NetworkError;
 }
 
-export function isUnauthorized(error: unknown): boolean {
-  return isApiError(error) && error.status === 401;
+export function hasStatus(error: unknown, status: number): boolean {
+  return isApiError(error) && error.status === status;
 }
 
-export function isForbidden(error: unknown): boolean {
-  return isApiError(error) && error.status === 403;
+export function hasCode(error: unknown, ...codes: string[]): boolean {
+  return isApiError(error) && codes.includes(error.code);
 }
 
-export function isNotFound(error: unknown): boolean {
-  return isApiError(error) && error.status === 404;
+// For money writes: no answer, or a server crash, means we do not know if it was saved.
+export function isUnknownOutcome(error: unknown): boolean {
+  return isNetworkError(error) || (isApiError(error) && error.status >= 500);
 }
 
-// Someone else saved this record first. Reload before trying again.
-export function isStaleVersion(error: unknown): boolean {
-  return isApiError(error) && error.status === 412;
-}
-
-export function isValidationError(error: unknown): error is ApiError & {
-  fieldErrors: Record<string, string[]>;
-} {
-  return isApiError(error) && error.status === 422 && error.fieldErrors !== undefined;
+export function requestIdOf(error: unknown): string | undefined {
+  return isApiError(error) ? error.requestId : undefined;
 }

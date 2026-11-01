@@ -1,6 +1,6 @@
 const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api/v1';
 
-// Resolve against the page origin so the same code works in the browser and in jsdom tests.
+// Resolve against the page origin so the same code works in the browser and in tests.
 const apiBaseUrl =
   typeof window !== 'undefined'
     ? new URL(rawBaseUrl, window.location.origin).toString()
@@ -15,7 +15,8 @@ if (mocksRequested && import.meta.env.PROD && !isDemoBuild) {
 
 export const config = {
   apiBaseUrl: apiBaseUrl.replace(/\/+$/, ''),
-  // Production demos are synthetic and explicit; normal production builds remain mock-free.
   mocksEnabled: mocksRequested && (import.meta.env.DEV || isDemoBuild),
   languageStorageKey: 'oceanlink.language',
+  // Money writes give up after this long and are then treated as "unknown result".
+  financialTimeoutMs: 15_000,
 } as const;

@@ -1,82 +1,71 @@
-import Alert from '@mui/material/Alert';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 
-import { ErrorState } from '@/components/ErrorState';
-import type { FlashState } from '@/components/FlashMessage';
-import { LoadingState } from '@/components/LoadingState';
+import { useBreadcrumbs } from '@/components/breadcrumbs';
 import { PageHeader } from '@/components/PageHeader';
-import { isNotFound } from '@/lib/api/errors';
+import { ErrorState, LoadingState } from '@/components/States';
+import { useToast } from '@/components/toastContext';
+import { hasStatus, requestIdOf } from '@/lib/api/errors';
+import { safeReturnTo } from '@/lib/navigation';
 
+import { useCustomer, useSaveCustomer } from './api';
 import { CustomerForm } from './CustomerForm';
-import { customerToForm, diffWrite, formToWrite } from './formModel';
-import { useCustomer, useUpdateCustomer } from './queries';
+import { changedFields, customerToForm, formToWrite } from './model';
 
-export function CustomerEditPage() {
+export default function CustomerEditPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const toast = useToast();
   const { id = '' } = useParams();
+  const [params] = useSearchParams();
   const customerQuery = useCustomer(id);
-  const update = useUpdateCustomer(id);
-  // Only an explicit reload resets the form, so a background refetch never wipes typed edits.
-  const [reloadCount, setReloadCount] = useState(0);
-
-  // Fetch the latest record and restart the form from it. If the fetch fails the form is kept,
-  // so typed edits are not lost for nothing.
-  const reloadCustomer = async () => {
-    const result = await customerQuery.refetch();
-    if (!result.isError) setReloadCount((n) => n + 1);
-  };
-
-  if (customerQuery.isPending) {
-    return <LoadingState label={t('app.loading')} />;
-  }
-
   const customer = customerQuery.data;
+  const save = useSaveCustomer(customer);
+  const back = safeReturnTo(params.get('returnTo'), `/customers/${id}`);
+  // The form restarts only on an explicit reload, so a background refresh never wipes typing.
+  const [formKey, setFormKey] = useState(0);
+  useBreadcrumbs([
+    { label: t('nav.customers'), to: '/customers' },
+    { label: customer?.display_name ?? t('common.loading'), to: back },
+    { label: t('common.edit') },
+  ]);
 
-  // A failed reload keeps the form; only a first load can end in this screen.
+  if (customerQuery.isPending) return <LoadingState rows={6} />;
   if (!customer) {
-    const notFound = isNotFound(customerQuery.error);
+    const missing = hasStatus(customerQuery.error, 404);
     return (
       <ErrorState
-        title={notFound ? t('customers.notFoundTitle') : t('common.loadFailedTitle')}
-        body={notFound ? t('customers.notFoundBody') : t('common.loadFailedBody')}
-        actionLabel={notFound ? t('customers.backToList') : t('app.retry')}
-        onAction={() =>
-          notFound ? void navigate('/customers', { replace: true }) : void customerQuery.refetch()
-        }
+        title={missing ? t('customers.notFoundTitle') : undefined}
+        body={missing ? t('customers.notFoundBody') : undefined}
+        onRetry={missing ? undefined : () => void customerQuery.refetch()}
+        requestId={requestIdOf(customerQuery.error)}
       />
     );
   }
 
   return (
     <>
-      <PageHeader title={t('customers.editTitle')} description={customer.display_name} />
-      {customerQuery.isRefetchError && (
-        <Alert severity="warning" role="status" sx={{ mb: 2 }}>
-          {t('common.reloadFailed')}
-        </Alert>
-      )}
+      <PageHeader title={t('customers.editTitle', { name: customer.display_name })} />
       <CustomerForm
-        key={reloadCount}
+        key={`${customer.id}-${formKey}`}
         defaultValues={customerToForm(customer)}
-        submitLabel={t('common.save')}
-        onCancel={() => void navigate(`/customers/${customer.id}`)}
-        onReload={() => void reloadCustomer()}
+        submitLabel={t('customers.saveChanges')}
+        onCancel={() => void navigate(back)}
+        onReload={() => {
+          void customerQuery.refetch().then((result) => {
+            if (!result.isError) setFormKey((value) => value + 1);
+          });
+        }}
         onSubmit={async (values) => {
-          const changes = diffWrite(formToWrite(customerToForm(customer)), formToWrite(values));
+          const changes = changedFields(formToWrite(customerToForm(customer)), formToWrite(values));
           if (Object.keys(changes).length > 0) {
-            await update.mutateAsync({ version: customer.version, body: changes });
+            await save.mutateAsync(changes);
+            toast.success(t('customers.saved'));
+          } else {
+            toast.success(t('common.noChanges'));
           }
-          const state: FlashState = {
-            flash: {
-              messageKey:
-                Object.keys(changes).length > 0 ? 'customers.saved' : 'customers.noChanges',
-              severity: Object.keys(changes).length > 0 ? 'success' : 'info',
-            },
-          };
-          void navigate(`/customers/${customer.id}`, { replace: true, state });
+          void navigate(back, { replace: true });
         }}
       />
     </>

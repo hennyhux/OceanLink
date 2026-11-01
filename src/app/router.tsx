@@ -1,58 +1,55 @@
+import type { ComponentType } from 'react';
 import { createBrowserRouter, createMemoryRouter, Navigate, type RouteObject } from 'react-router';
 
-import { NotFoundPage } from '@/components/NotFoundPage';
-import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
+import { NotFoundPage } from '@/components/MessagePages';
+import { RequireAuth, RequirePasswordCurrent } from '@/features/auth/guards';
 import { LoginPage } from '@/features/auth/LoginPage';
-import { RequireAuth } from '@/features/auth/RequireAuth';
-import { RequireRole } from '@/features/auth/RequireRole';
-import { CustomerDetailPage } from '@/features/customers/CustomerDetailPage';
-import { CustomerEditPage } from '@/features/customers/CustomerEditPage';
-import { CustomerNewPage } from '@/features/customers/CustomerNewPage';
-import { CustomersPage } from '@/features/customers/CustomersPage';
-import { OverviewPage } from '@/features/overview/OverviewPage';
-import { NotImplementedPage } from '@/features/placeholders/NotImplementedPage';
-import { VehicleEditPage } from '@/features/vehicles/VehicleEditPage';
-import { VehicleNewPage } from '@/features/vehicles/VehicleNewPage';
-import { VehiclesPage } from '@/features/vehicles/VehiclesPage';
-import { PaymentsPage } from '@/features/payments/PaymentsPage';
 
 import { AppShell } from './AppShell';
-import { ADMIN_ONLY } from './navigation';
+import { VehicleEditRedirect } from './redirects';
+import { RouteError } from './RouteError';
+
+// Each page loads on demand so the first screen stays small.
+const page = (load: () => Promise<{ default: ComponentType }>) => async () => ({
+  Component: (await load()).default,
+});
 
 export const routes: RouteObject[] = [
+  { path: '/login', element: <LoginPage />, errorElement: <RouteError /> },
   {
-    errorElement: <RouteErrorBoundary />,
+    path: '/',
+    element: (
+      <RequireAuth>
+        <RequirePasswordCurrent>
+          <AppShell />
+        </RequirePasswordCurrent>
+      </RequireAuth>
+    ),
+    errorElement: <RouteError />,
     children: [
-      { path: '/login', element: <LoginPage /> },
+      { index: true, lazy: page(() => import('@/features/overview/OverviewPage')) },
+      { path: 'customers', lazy: page(() => import('@/features/customers/CustomersPage')) },
+      { path: 'customers/new', lazy: page(() => import('@/features/customers/CustomerNewPage')) },
       {
-        element: <RequireAuth />,
-        children: [
-          {
-            element: <AppShell />,
-            children: [
-              { index: true, element: <OverviewPage /> },
-              { path: 'customers', element: <CustomersPage /> },
-              { path: 'customers/new', element: <CustomerNewPage /> },
-              { path: 'customers/:id', element: <CustomerDetailPage /> },
-              { path: 'customers/:id/edit', element: <CustomerEditPage /> },
-              { path: 'vehicles', element: <VehiclesPage /> },
-              { path: 'vehicles/new', element: <VehicleNewPage /> },
-              { path: 'vehicles/:id/edit', element: <VehicleEditPage /> },
-              { path: 'agreements', element: <Navigate to="/vehicles" replace /> },
-              { path: 'invoices', element: <NotImplementedPage titleKey="nav.invoices" /> },
-              { path: 'payments', element: <PaymentsPage /> },
-              { path: 'reports', element: <NotImplementedPage titleKey="nav.reports" /> },
-              {
-                element: <RequireRole roles={ADMIN_ONLY} />,
-                children: [
-                  { path: 'settings', element: <NotImplementedPage titleKey="nav.settings" /> },
-                ],
-              },
-              { path: '*', element: <NotFoundPage /> },
-            ],
-          },
-        ],
+        path: 'customers/:id',
+        lazy: page(() => import('@/features/customers/CustomerDetailPage')),
       },
+      {
+        path: 'customers/:id/edit',
+        lazy: page(() => import('@/features/customers/CustomerEditPage')),
+      },
+      { path: 'vehicles', lazy: page(() => import('@/features/vehicles/VehiclesPage')) },
+      { path: 'vehicles/new', lazy: page(() => import('@/features/vehicles/VehicleNewPage')) },
+      { path: 'vehicles/:id', lazy: page(() => import('@/features/vehicles/VehicleDetailPage')) },
+      // Old bookmarks from the previous app.
+      { path: 'vehicles/:id/edit', element: <VehicleEditRedirect /> },
+      { path: 'agreements/*', element: <Navigate to="/vehicles" replace /> },
+      { path: 'payments', lazy: page(() => import('@/features/payments/PaymentsPage')) },
+      { path: 'invoices', lazy: page(() => import('@/features/placeholders/InvoicesPage')) },
+      { path: 'reports', lazy: page(() => import('@/features/placeholders/ReportsPage')) },
+      { path: 'settings/*', lazy: page(() => import('@/features/placeholders/SettingsPage')) },
+      { path: 'profile', lazy: page(() => import('@/features/placeholders/ProfilePage')) },
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
 ];
@@ -61,6 +58,6 @@ export function createAppRouter() {
   return createBrowserRouter(routes);
 }
 
-export function createTestRouter(initialEntries: string[] = ['/']) {
+export function createTestRouter(initialEntries: string[]) {
   return createMemoryRouter(routes, { initialEntries });
 }

@@ -417,11 +417,13 @@ Supported recorded methods:
 A payment includes its customer, amount, effective date, method, reference, and recording staff member.
 
 - Payments may be allocated across multiple invoices belonging to the same customer.
+- Each new payment is automatically applied to that customer's unpaid issued invoices, ordered by due date, then issue date, then ID ascending. Include invoices not yet due and all sources, but skip paid, draft, and void invoices. Creation, allocation, audit events, and idempotency commit atomically.
 - Partial payments are supported.
 - Allocations cannot exceed the payment’s available amount.
 - Allocations cannot exceed an invoice’s remaining collectible balance.
 - Overpayments remain as unapplied customer credit.
 - Applying existing credit must not create a second cash receipt.
+- Automatic allocations record the acting staff user and invoice number and increment the payment version. Retrying the same payment request cannot allocate twice. Reversing a payment releases its allocations and restores the affected unpaid invoice balances.
 
 A credit note reduces charges. A refund records or initiates a return of money. They are separate events.
 

@@ -1,29 +1,37 @@
-// Vehicle shapes follow REQUIREMENTS.md sections 7.1 and 10. The backend OpenAPI schema is the
-// source of truth once it exists; field names here are the proposed wire names.
-
-import type { VehicleParking, VehicleParkingWrite } from './parkingModel';
+import type { Money } from '@/lib/money';
 
 export const VEHICLE_TYPES = ['truck', 'trailer', 'combination', 'compact'] as const;
-
 export type VehicleType = (typeof VEHICLE_TYPES)[number];
+
+export interface RateChange {
+  effective_on: string;
+  monthly_rate: Money;
+  reason: string;
+}
+
+export interface VehicleParking {
+  starts_on: string;
+  // Exclusive: service through Oct 31 ends on Nov 1.
+  ends_on: string | null;
+  // The rate in effect today, or the first rate if service has not started.
+  monthly_rate: Money;
+  rate_history: RateChange[];
+}
 
 export interface Vehicle {
   id: string;
   version: number;
   customer_id: string;
-  // Read-only copy so lists do not need a second request per row.
   customer_name: string;
   vehicle_type: VehicleType;
-  // Needed to tell apart vehicles that share one USDOT number.
   unit_number: string | null;
   plate_number: string | null;
   plate_jurisdiction: string | null;
-  // Digits only. Identifies the carrier, not a single truck.
   usdot_number: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  parking?: VehicleParking | null;
+  parking: VehicleParking | null;
 }
 
 export interface VehicleWrite {
@@ -35,14 +43,23 @@ export interface VehicleWrite {
   usdot_number: string | null;
 }
 
-export interface VehicleCreateWrite extends VehicleWrite {
-  parking?: VehicleParkingWrite;
+export type VehicleUpdate = Partial<Omit<VehicleWrite, 'customer_id'>>;
+
+export interface ParkingWrite {
+  starts_on: string;
+  ends_on: string | null;
+  monthly_rate: Money;
+  effective_on: string;
+  reason: string;
+}
+
+export interface VehicleCreate extends VehicleWrite {
+  parking?: ParkingWrite;
 }
 
 export interface VehicleListParams {
   q?: string;
   customer_id?: string;
-  // Omit to get active vehicles only.
   include_inactive?: boolean;
   page?: number;
   page_size?: number;

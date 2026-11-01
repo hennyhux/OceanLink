@@ -1,120 +1,101 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { authEvents } from '@/lib/api/authEvents';
-import { isNetworkError, isUnauthorized } from '@/lib/api/errors';
+import { hasStatus } from '@/lib/api/errors';
+import { changeLanguage, hasStoredLanguage, isLanguage } from '@/lib/i18n';
 
-import { authApi, authKeys } from './api';
-import { AuthContext, type AuthContextValue, type AuthStatus } from './AuthContext';
+import { authApi } from './api';
+import { AuthContext, type AuthState } from './AuthContext';
 import type { LoginRequest, SessionResponse } from './types';
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const queryClient = useQueryClient();
-  const [sessionExpired, setSessionExpired] = useState(false);
-  const [logoutServerFailed, setLogoutServerFailed] = useState(false);
+const SESSION_KEY = ['auth', 'session'] as const;
 
-  const sessionQuery = useQuery<SessionResponse | null, Error>({
-    queryKey: authKeys.session,
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const client = useQueryClient();
+  const [signedOutReason, setSignedOutReason] = useState<'expired' | null>(null);
+
+  const query = useQuery({
+    queryKey: SESSION_KEY,
     queryFn: async ({ signal }) => {
       try {
         return await authApi.session(signal);
       } catch (error) {
-        if (isUnauthorized(error)) return null;
+        if (hasStatus(error, 401)) return null;
         throw error;
       }
     },
     staleTime: Infinity,
-    gcTime: Infinity,
-    retry: (count, error) => isNetworkError(error) && count < 1,
+    retry: false,
   });
 
-  const clearSensitiveData = useCallback(() => {
-    // Drop every cached query so the next user cannot see the previous user's data.
-    queryClient.clear();
-  }, [queryClient]);
-
-  // Any protected request that comes back 401 means the session ended on the server.
-  useEffect(() => {
-    return authEvents.onUnauthorized(() => {
-      const current = queryClient.getQueryData<SessionResponse | null>(authKeys.session);
-      if (current) {
-        setSessionExpired(true);
-        clearSensitiveData();
-        queryClient.setQueryData<SessionResponse | null>(authKeys.session, null);
-      }
-    });
-  }, [queryClient, clearSensitiveData]);
-
-  const loginMutation = useMutation({
-    mutationFn: authApi.login,
-    onSuccess: (data) => {
-      // A fresh login replaces whatever the previous user may have left in the cache.
-      clearSensitiveData();
-      setSessionExpired(false);
-      setLogoutServerFailed(false);
-      queryClient.setQueryData<SessionResponse | null>(authKeys.session, data);
+  // Signing out drops every cached customer and money record.
+  const clearToSignedOut = useCallback(
+    (reason: 'expired' | null) => {
+      client.removeQueries({ predicate: (query) => query.queryKey[0] !== 'auth' });
+      client.setQueryData<SessionResponse | null>(SESSION_KEY, null);
+      setSignedOutReason(reason);
     },
-  });
+    [client],
+  );
 
-  const logoutMutation = useMutation({
-    mutationFn: authApi.logout,
-    onError: () => setLogoutServerFailed(true),
-    onSuccess: () => setLogoutServerFailed(false),
-    onSettled: () => {
-      // Even if the server call failed, the device is signed out.
-      clearSensitiveData();
-      setSessionExpired(false);
-      queryClient.setQueryData<SessionResponse | null>(authKeys.session, null);
-    },
-  });
-
-  const { mutateAsync: loginAsync } = loginMutation;
-  const { mutateAsync: logoutAsync } = logoutMutation;
-  const { refetch: refetchSession } = sessionQuery;
+  useEffect(
+    () =>
+      authEvents.onUnauthorized(() => {
+        if (client.getQueryData(SESSION_KEY)) clearToSignedOut('expired');
+      }),
+    [client, clearToSignedOut],
+  );
 
   const login = useCallback(
-    async (credentials: LoginRequest) => {
-      await loginAsync(credentials);
+    async (body: LoginRequest) => {
+      const session = await authApi.login(body);
+      client.setQueryData(SESSION_KEY, session);
+      setSignedOutReason(null);
+      const preferred = session.user.preferred_language;
+      if (isLanguage(preferred) && !hasStoredLanguage()) {
+        await changeLanguage(preferred);
+      }
     },
-    [loginAsync],
+    [client],
   );
 
   const logout = useCallback(async () => {
-    await logoutAsync();
-  }, [logoutAsync]);
+    try {
+      await authApi.logout();
+    } finally {
+      clearToSignedOut(null);
+    }
+  }, [clearToSignedOut]);
 
-  const recheck = useCallback(async () => {
-    await refetchSession();
-  }, [refetchSession]);
+  const keepAlive = useCallback(async () => {
+    const session = await authApi.activity();
+    client.setQueryData(SESSION_KEY, session);
+  }, [client]);
 
-  const status: AuthStatus = useMemo(() => {
-    if (sessionQuery.isPending) return 'checking';
-    if (sessionQuery.isError) return 'unavailable';
-    return sessionQuery.data ? 'authenticated' : 'unauthenticated';
-  }, [sessionQuery.isPending, sessionQuery.isError, sessionQuery.data]);
+  const expire = useCallback(() => clearToSignedOut('expired'), [clearToSignedOut]);
+  const { data, isPending, isError, refetch } = query;
 
-  const value = useMemo<AuthContextValue>(
-    () => ({
+  const value = useMemo<AuthState>(() => {
+    const status = isPending
+      ? 'loading'
+      : isError && !data
+        ? 'error'
+        : data
+          ? 'signedIn'
+          : 'signedOut';
+    return {
       status,
-      user: sessionQuery.data?.user ?? null,
-      sessionExpired,
-      logoutServerFailed,
+      user: data?.user ?? null,
+      session: data?.session ?? null,
+      signedOutReason,
       login,
       logout,
-      recheck,
-      isLoggingOut: logoutMutation.isPending,
-    }),
-    [
-      status,
-      sessionQuery.data,
-      sessionExpired,
-      logoutServerFailed,
-      login,
-      logout,
-      recheck,
-      logoutMutation.isPending,
-    ],
-  );
+      keepAlive,
+      expire,
+      retry: () => void refetch(),
+    };
+  }, [data, isPending, isError, refetch, signedOutReason, login, logout, keepAlive, expire]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -14,7 +14,7 @@ export function isLanguage(value: unknown): value is Language {
   return typeof value === 'string' && (SUPPORTED_LANGUAGES as readonly string[]).includes(value);
 }
 
-// The UI language is not sensitive, so localStorage is fine for it.
+// The UI language is not sensitive, so local storage is fine for it.
 export function readStoredLanguage(): Language {
   try {
     const stored = window.localStorage.getItem(config.languageStorageKey);
@@ -24,16 +24,20 @@ export function readStoredLanguage(): Language {
   }
 }
 
-export function storeLanguage(language: Language): void {
+export function hasStoredLanguage(): boolean {
   try {
-    window.localStorage.setItem(config.languageStorageKey, language);
+    return isLanguage(window.localStorage.getItem(config.languageStorageKey));
   } catch {
-    // Storage can be unavailable (private mode). The in-memory choice still applies.
+    return false;
   }
 }
 
 export async function changeLanguage(language: Language): Promise<void> {
-  storeLanguage(language);
+  try {
+    window.localStorage.setItem(config.languageStorageKey, language);
+  } catch {
+    // Private browsing can block storage. The choice still applies for this visit.
+  }
   await i18n.changeLanguage(language);
   document.documentElement.lang = language;
 }
@@ -41,18 +45,15 @@ export async function changeLanguage(language: Language): Promise<void> {
 export function setupI18n(initialLanguage: Language = readStoredLanguage()): typeof i18n {
   if (!i18n.isInitialized) {
     void i18n.use(initReactI18next).init({
-      resources: {
-        en: { translation: en },
-        'zh-CN': { translation: zhCN },
-      },
+      resources: { en: { translation: en }, 'zh-CN': { translation: zhCN } },
       lng: initialLanguage,
       fallbackLng: 'en',
       supportedLngs: [...SUPPORTED_LANGUAGES],
       interpolation: { escapeValue: false },
       returnNull: false,
     });
-    document.documentElement.lang = initialLanguage;
   }
+  document.documentElement.lang = initialLanguage;
   return i18n;
 }
 

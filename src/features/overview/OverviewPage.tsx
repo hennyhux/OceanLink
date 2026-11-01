@@ -1,306 +1,147 @@
-import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
+import AddIcon from '@mui/icons-material/Add';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
+import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
+import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import Button from '@mui/material/Button';
 import Grid from '@mui/material/Grid';
-import Link from '@mui/material/Link';
-import Paper from '@mui/material/Paper';
-import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
-import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
-import { Link as RouterLink } from 'react-router';
+import { Link as RouterLink, useSearchParams } from 'react-router';
 
+import { useBreadcrumbs } from '@/components/breadcrumbs';
+import { Money } from '@/components/Money';
 import { PageHeader } from '@/components/PageHeader';
-import { formatMoney } from '@/lib/money';
-import { useOverviewMetrics } from './api';
+import { formatDate } from '@/lib/dates';
 
-export function OverviewPage() {
+import { ActivityCard } from './ActivityCard';
+import { AttentionCard } from './AttentionCard';
+import { GlobalSearch } from './GlobalSearch';
+import { KpiCard } from './KpiCard';
+import { PaymentSummaryCard } from './PaymentSummaryCard';
+import { SnapshotCard } from './SnapshotCard';
+import { useOverviewData } from './useOverviewData';
+
+const failed = (query: { isError: boolean; data?: unknown }) =>
+  query.isError && query.data === undefined;
+
+export default function OverviewPage() {
   const { t, i18n } = useTranslation();
-  const theme = useTheme();
-  const metrics = useOverviewMetrics();
-  const money = (amount: number) => formatMoney(amount, i18n.resolvedLanguage ?? 'zh-CN');
-  const secondaryTextColor = alpha(theme.palette.text.primary, 0.76);
+  const language = i18n.resolvedLanguage ?? 'en';
+  const [params] = useSearchParams();
+  // While a search is active the results take the page; the dashboard returns on clear.
+  const searching = Boolean(params.get('q')?.trim());
+  const data = useOverviewData();
+  const { summary, overdueCustomers, activeCustomers, monthPayments, today } = data;
+  const metrics = summary.data;
+  useBreadcrumbs([{ label: t('nav.overview') }]);
+
+  const overdueCount = overdueCustomers.data?.total ?? 0;
+  const pastDue = metrics?.overdue_invoices.amount ?? 0;
+  const unbilled = metrics?.unbilled_parking.amount ?? 0;
+  const active = activeCustomers.data?.total;
+  const total = metrics?.total_customers;
 
   return (
-    <Stack
-      spacing={3}
-      sx={{
-        width: '100%',
-        maxWidth: 960,
-        mx: 'auto',
-        px: { xs: 0.5, sm: 0 },
-        '& > :first-of-type': { mb: 0 },
-      }}
-    >
+    <>
       <PageHeader
-        title={t('overview.title')}
-        titleSx={{ fontSize: { xs: '1.75rem', sm: '2rem' }, lineHeight: 1.2 }}
-        action={
-          <Stack direction="row" flexWrap="wrap" gap={1}>
-            <Button
-              component={RouterLink}
-              to="/payments?record=1"
-              variant="contained"
-              size="large"
-              sx={{ minHeight: 48 }}
-            >
-              {t('overview.actions.recordPayment')}
-            </Button>
-            <Button
-              component={RouterLink}
-              to="/customers/new"
-              variant="outlined"
-              size="large"
-              sx={{ minHeight: 48 }}
-            >
-              {t('overview.actions.addCustomer')}
-            </Button>
-          </Stack>
-        }
-      />
-      {metrics.isPending && <Typography role="status">{t('app.loading')}</Typography>}
-      {metrics.isError && (
-        <Alert
-          severity="error"
-          action={<Button onClick={() => void metrics.refetch()}>{t('app.retry')}</Button>}
-        >
-          {t('overview.loadFailed')}
-        </Alert>
-      )}
-      {metrics.data && (
-        <>
-          <Paper
+        title={t('nav.overview')}
+        subtitle={today ? t('overview.asOf', { date: formatDate(today, language) }) : undefined}
+        secondaryActions={
+          <Button
+            component={RouterLink}
+            to="/customers/new"
             variant="outlined"
-            sx={{
-              p: { xs: 2, sm: 3 },
-              borderRadius: 1,
-              bgcolor: alpha(
-                theme.palette.primary.main,
-                theme.palette.mode === 'dark' ? 0.2 : 0.08,
-              ),
-              borderColor: alpha(
-                theme.palette.primary.main,
-                theme.palette.mode === 'dark' ? 0.5 : 0.22,
-              ),
-            }}
+            size="large"
+            startIcon={<AddIcon />}
           >
-            <Stack spacing={1.5}>
-              <Box>
-                <Typography
-                  variant="body2"
-                  fontWeight={600}
-                  sx={{ fontSize: 16, color: secondaryTextColor }}
-                >
-                  {t('overview.owed.total')}
-                </Typography>
-                <Typography
-                  component="p"
-                  sx={{
-                    mt: 0.5,
-                    mb: 0,
-                    fontSize: { xs: '2rem', sm: '2.25rem' },
-                    lineHeight: 1.15,
-                    fontWeight: 700,
-                    fontVariantNumeric: 'tabular-nums',
-                    color:
-                      metrics.data.outstanding_invoices.amount > 0 ? 'error.main' : 'text.primary',
-                  }}
-                >
-                  {money(metrics.data.outstanding_invoices.amount)}
-                </Typography>
-              </Box>
-              <Stack
-                component="ul"
-                spacing={1}
-                sx={{ listStyle: 'none', m: 0, p: 0, maxWidth: 420 }}
-              >
-                <Stack
-                  component="li"
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="baseline"
-                  columnGap={2}
-                >
-                  <Link
-                    component={RouterLink}
-                    to="/customers?overdue=1"
-                    color="error.main"
-                    fontWeight={650}
-                    sx={{ fontSize: 16 }}
-                  >
-                    {t('overview.owed.pastDue')}
-                  </Link>
-                  <Typography
-                    component="span"
-                    color="error.main"
-                    sx={{
-                      fontSize: '1.25rem',
-                      fontWeight: 650,
-                      fontVariantNumeric: 'tabular-nums',
-                    }}
-                  >
-                    {money(metrics.data.overdue_invoices.amount)}
-                  </Typography>
-                </Stack>
-                <Stack
-                  component="li"
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="baseline"
-                  columnGap={2}
-                >
-                  <Typography
-                    component="span"
-                    fontWeight={600}
-                    sx={{ fontSize: 16, color: secondaryTextColor }}
-                  >
-                    {t('overview.owed.notYetDue')}
-                  </Typography>
-                  <Typography
-                    component="span"
-                    sx={{
-                      fontSize: '1.25rem',
-                      fontWeight: 600,
-                      fontVariantNumeric: 'tabular-nums',
-                      color: secondaryTextColor,
-                    }}
-                  >
-                    {money(
-                      Math.max(
-                        0,
-                        metrics.data.outstanding_invoices.amount -
-                          metrics.data.overdue_invoices.amount,
-                      ),
-                    )}
-                  </Typography>
-                </Stack>
-              </Stack>
-            </Stack>
-          </Paper>
+            {t('customers.add')}
+          </Button>
+        }
+        primaryAction={{ label: t('payments.record'), icon: <AddIcon />, to: '/payments?record=1' }}
+      />
 
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Paper
-                variant="outlined"
-                sx={{
-                  height: '100%',
-                  p: { xs: 2, sm: 2.5 },
-                  borderRadius: 1,
-                  bgcolor: 'background.paper',
-                }}
-              >
-                <Typography
-                  variant="body2"
-                  fontWeight={700}
-                  sx={{ fontSize: 16, color: secondaryTextColor }}
-                >
-                  {t('overview.metrics.paymentsThisMonth')}
-                </Typography>
-                <Typography
-                  sx={{
-                    mt: 0.5,
-                    fontSize: '1.5rem',
-                    lineHeight: 1.35,
-                    fontWeight: 650,
-                    fontVariantNumeric: 'tabular-nums',
-                  }}
-                >
-                  {money(metrics.data.payments_received_this_month.amount)}
-                </Typography>
-              </Paper>
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Paper
-                variant="outlined"
-                sx={{
-                  height: '100%',
-                  p: { xs: 2, sm: 2.5 },
-                  borderRadius: 1,
-                  bgcolor: 'background.paper',
-                }}
-              >
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  fontWeight={700}
-                  sx={{ fontSize: 16 }}
-                >
-                  {t('overview.metrics.unbilledParking')}
-                </Typography>
-                <Typography
-                  sx={{
-                    mt: 0.5,
-                    fontSize: '1.5rem',
-                    lineHeight: 1.35,
-                    fontWeight: 650,
-                    fontVariantNumeric: 'tabular-nums',
-                  }}
-                >
-                  {money(metrics.data.unbilled_parking.amount)}
-                </Typography>
-              </Paper>
-            </Grid>
+      <GlobalSearch />
+
+      {!searching && (
+        <Grid container spacing={{ xs: 1.5, sm: 3 }}>
+          <Grid size={{ xs: 6, md: 3 }}>
+            <KpiCard
+              label={t('overview.pastDue')}
+              icon={<ErrorOutlineIcon />}
+              danger={pastDue > 0}
+              loading={summary.isPending || overdueCustomers.isPending}
+              failed={failed(summary) || failed(overdueCustomers)}
+              value={<Money cents={pastDue} tone={pastDue > 0 ? 'owed' : 'neutral'} size="kpi" />}
+              detail={
+                overdueCount > 0
+                  ? t('overview.customersCount', { count: overdueCount })
+                  : t('overview.noPastDue')
+              }
+              link={
+                overdueCount > 0
+                  ? { label: t('overview.followUp'), to: '/customers?overdue=1' }
+                  : undefined
+              }
+            />
+          </Grid>
+          <Grid size={{ xs: 6, md: 3 }}>
+            <KpiCard
+              label={t('overview.paidThisMonth')}
+              icon={<PaymentsOutlinedIcon />}
+              loading={summary.isPending}
+              failed={failed(summary)}
+              value={<Money cents={metrics?.payments_received_this_month.amount ?? 0} size="kpi" />}
+              detail={
+                monthPayments.data
+                  ? t('overview.paymentsCount', { count: monthPayments.data.total })
+                  : undefined
+              }
+              link={{ label: t('overview.viewPayments'), to: '/payments' }}
+            />
+          </Grid>
+          <Grid size={{ xs: 6, md: 3 }}>
+            <KpiCard
+              label={t('overview.unbilled')}
+              icon={<ReceiptLongOutlinedIcon />}
+              loading={summary.isPending}
+              failed={failed(summary)}
+              value={<Money cents={unbilled} size="kpi" />}
+              detail={unbilled > 0 ? t('overview.unbilledHint') : t('overview.nothingToBill')}
+              link={
+                unbilled > 0 ? { label: t('overview.reviewCharges'), to: '/customers' } : undefined
+              }
+            />
+          </Grid>
+          <Grid size={{ xs: 6, md: 3 }}>
+            <KpiCard
+              label={t('overview.activeCustomers')}
+              icon={<PeopleAltOutlinedIcon />}
+              loading={summary.isPending || activeCustomers.isPending}
+              failed={failed(summary) || failed(activeCustomers)}
+              value={active}
+              detail={
+                active !== undefined && total !== undefined
+                  ? t('overview.activeSplit', { total, inactive: Math.max(0, total - active) })
+                  : undefined
+              }
+              link={{ label: t('overview.viewCustomers'), to: '/customers' }}
+            />
           </Grid>
 
-          <Stack direction="row" flexWrap="wrap" gap={1}>
-            <Link
-              component={RouterLink}
-              to="/customers"
-              underline="none"
-              sx={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 0.75,
-                minHeight: 48,
-                px: 1.5,
-                border: 1,
-                borderColor: 'divider',
-                borderRadius: 1,
-                bgcolor: 'background.paper',
-                color: 'primary.main',
-                fontSize: 16,
-                fontWeight: 600,
-                '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.08) },
-                '&:focus-visible': {
-                  outline: '3px solid',
-                  outlineColor: 'primary.main',
-                  outlineOffset: 2,
-                },
-              }}
-            >
-              {t('overview.metrics.totalCustomers')}:{' '}
-              <strong>{metrics.data.total_customers}</strong>
-            </Link>
-            <Link
-              component={RouterLink}
-              to="/vehicles"
-              underline="none"
-              sx={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 0.75,
-                minHeight: 48,
-                px: 1.5,
-                border: 1,
-                borderColor: 'divider',
-                borderRadius: 1,
-                bgcolor: 'background.paper',
-                color: 'primary.main',
-                fontSize: 16,
-                fontWeight: 600,
-                '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.08) },
-                '&:focus-visible': {
-                  outline: '3px solid',
-                  outlineColor: 'primary.main',
-                  outlineOffset: 2,
-                },
-              }}
-            >
-              {t('overview.metrics.totalTrucks')}: <strong>{metrics.data.total_trucks}</strong>
-            </Link>
-          </Stack>
-        </>
+          <Grid size={{ xs: 12, md: 7, lg: 8 }}>
+            <AttentionCard data={data} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 5, lg: 4 }}>
+            <PaymentSummaryCard data={data} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 7, lg: 8 }}>
+            <ActivityCard data={data} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 5, lg: 4 }}>
+            <SnapshotCard data={data} />
+          </Grid>
+        </Grid>
       )}
-    </Stack>
+    </>
   );
 }

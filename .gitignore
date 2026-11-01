@@ -2,6 +2,8 @@ node_modules
 dist
 OceanLink-demo.zip
 coverage
+reports
+.stryker-tmp
 *.local
 *.tsbuildinfo
 .env

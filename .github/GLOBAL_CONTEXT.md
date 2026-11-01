@@ -99,10 +99,10 @@ One production environment for now. A permanent staging environment is required 
 
 ## Current Status
 
-- Frontend authentication, customer/vehicle workflows, per-vehicle monthly parking and customer account summary are implemented against development mocks. Real FastAPI integration is unverified.
+- Frontend rebuilt from scratch on 2026-10-31 following [UX_REBUILD.md](UX_REBUILD.md). Sign in, overview, customers, vehicles with monthly parking, monthly charges, one-time charges, payments (record, receipt, reversal) are implemented against an in-memory mock backend (`src/mocks/db.ts`). Invoices, Reports, Settings, and My profile are honest placeholders. Real FastAPI integration is unverified.
 - The project is split into 3 MVPs (REQUIREMENTS.md section 3).
 - Current focus: MVP 1, customers, monthly vehicle parking and billing. Rates are vehicle-owned; debt and latest payment come from the customer ledger. Receipt recording/reversal and reviewed monthly-charge issuance with optional credit application are implemented against mocks. Full invoice management/PDFs, general-purpose payment allocation, refunds and real-backend integration remain unfinished.
-- The overview dashboard shows six KPIs from `GET /reports/summary`: overdue and open invoice balances, unbilled parking, this-month valid payments, total customers, and total trucks. Totals include inactive records; truck count includes truck-trailer combinations but excludes standalone trailers.
+- The overview dashboard (redesigned 2026-10-31, see [UX_REBUILD.md](UX_REBUILD.md) section 7.2) shows four headline cards (past due, paid this month, not billed yet, active customers), a "Needs attention" list, a payment summary, recent activity, and a business snapshot. Money totals come from `GET /reports/summary`; counts and lists come from the customer, vehicle, and payment list endpoints.
 - Later: MVP 2 (physical check-in/out, occupancy, walk-ins), MVP 3 (driver reservations and Stripe payments).
 - Before go-live: the decisions listed in DEPLOYMENT.md section 17, a tested restore, and the desktop data cutover.
 
@@ -113,6 +113,8 @@ One production environment for now. A permanent staging environment is required 
 
 ## Known Inconsistencies
 
+- REQUIREMENTS.md section 4.3 describes a six-card overview and says other summaries belong in reports. The owner asked for a fuller dashboard on 2026-10-31 (needs attention, payment summary, recent activity, business snapshot). The six required numbers are all still shown. Update section 4.3 to match UX_REBUILD.md section 7.2.
+- BACKEND_REQUIREMENTS.md section 6.5 requires a positive monthly rate, but the frontend allows $0 for free parking. See [BACKEND_LOGIC_CHANGES.md](BACKEND_LOGIC_CHANGES.md) 2026-10-31.
 - REQUIREMENTS.md section 4.4 says balance values stay neutral unless an overdue amount exists, and that mobile customer cards show a truck count. The owner has since decided that any positive amount owed is red and that truck counts move to the customer's Vehicles section. See [UX_REBUILD.md](UX_REBUILD.md) section 1.2.
 - REQUIREMENTS.md section 16.1 requires AWS CDK and separate `dev`, `staging`, and `prod` environments. DEPLOYMENT.md has one `prod` environment and defers infrastructure as code.
 - REQUIREMENTS.md section 16.4 says back up at least hourly. DEPLOYMENT.md says every 30 minutes with tiered retention. These do not conflict, but REQUIREMENTS.md should point to DEPLOYMENT.md.
@@ -120,6 +122,8 @@ One production environment for now. A permanent staging environment is required 
 
 ## Change Log
 
+- 2026-10-31: Redesigned the Overview dashboard from the owner's sketch. No backend contract change; suggested summary fields for the backend are in [BACKEND_LOGIC_CHANGES.md](BACKEND_LOGIC_CHANGES.md).
+- 2026-10-31: Rebuilt the frontend from scratch to UX_REBUILD.md (previous app kept in git commit 7e74227). New shell, theme tokens, shared components, mock backend with one shared balance calculation, and 69 tests. Contract expectations for the backend (all-source invoice list, $0 monthly amounts, `/auth/activity`) are in [BACKEND_LOGIC_CHANGES.md](BACKEND_LOGIC_CHANGES.md).
 - 2026-10-31: Planned a from-scratch frontend UX rebuild focused on readability (blue sidebar shell, large titles, grouped form cards, 16px base text, checked color contrast). Directions, screen specs, and build order are in [UX_REBUILD.md](UX_REBUILD.md). No backend contract change.
 - 2026-10-24: Matched vehicle list and edit-screen presentation to customer screens, including mobile cards/search, desktop table headings and monthly-rate column, identity-first header, and outlined parking card. No backend contract change. See [BACKEND_LOGIC_CHANGES.md](BACKEND_LOGIC_CHANGES.md).
 - 2026-10-24: Removed capacity-pool selection, vehicle-type compatibility, and interval-capacity enforcement from monthly parking. See [BACKEND_LOGIC_CHANGES.md](BACKEND_LOGIC_CHANGES.md) for backend contract details.
